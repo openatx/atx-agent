@@ -1,0 +1,12 @@
+
+language: go
+sudo: false
+go:
+- 1.7
+install:
+- go get github.com/shurcooL/vfsgen
+- go get -v
+script:
+- go test -v
+after_success:
+  - test -n "$TRAVIS_TAG" && curl -sL https://git.io/goreleaser | bash

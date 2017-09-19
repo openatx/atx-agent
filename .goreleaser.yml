@@ -1,0 +1,13 @@
+builds:
+  -
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm
+    goarm:
+      - 6
+      - 7
+    flags: -tags vfs
+    hooks:
+      pre: go generate
