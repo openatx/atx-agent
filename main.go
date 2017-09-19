@@ -23,6 +23,7 @@ import (
 
 	"github.com/codeskyblue/kexec"
 	"github.com/franela/goreq"
+	"github.com/gorilla/mux"
 	"github.com/miekg/dns"
 )
 
@@ -171,7 +172,7 @@ type DownloadManager struct {
 	n  int
 }
 
-func NewDownloadManager() *DownloadManager {
+func newDownloadManager() *DownloadManager {
 	return &DownloadManager{
 		db: make(map[string]*DownloadProxy, 10),
 	}
@@ -215,7 +216,7 @@ type DownloadProxy struct {
 	wg         sync.WaitGroup
 }
 
-func NewDownloadProxy(wr io.Writer) *DownloadProxy {
+func newDownloadProxy(wr io.Writer) *DownloadProxy {
 	di := &DownloadProxy{
 		writer: wr,
 	}
@@ -238,9 +239,9 @@ func (d *DownloadProxy) Wait() {
 	d.wg.Wait()
 }
 
-var downManager = NewDownloadManager()
+var downManager = newDownloadManager()
 
-func AsyncDownloadInto(url string, filepath string, autoRelease bool) (di *DownloadProxy, err error) {
+func AsyncDownloadTo(url string, filepath string, autoRelease bool) (di *DownloadProxy, err error) {
 	res, err := goreq.Request{
 		Uri:             url,
 		MaxRedirects:    10,
@@ -254,7 +255,7 @@ func AsyncDownloadInto(url string, filepath string, autoRelease bool) (di *Downl
 		res.Body.Close()
 		return
 	}
-	di = NewDownloadProxy(file)
+	di = newDownloadProxy(file)
 	fmt.Sscanf(res.Header.Get("Content-Length"), "%d", &di.TotalSize)
 	downloadKey := downManager.Put(di)
 	go func() {
@@ -270,11 +271,13 @@ func AsyncDownloadInto(url string, filepath string, autoRelease bool) (di *Downl
 }
 
 func ServeHTTP(port int) error {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	m := mux.NewRouter()
+
+	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, "Hello World!")
 	})
 
-	http.HandleFunc("/shell", func(w http.ResponseWriter, r *http.Request) {
+	m.HandleFunc("/shell", func(w http.ResponseWriter, r *http.Request) {
 		command := r.FormValue("command")
 		if command == "" {
 			command = r.FormValue("c")
@@ -287,7 +290,7 @@ func ServeHTTP(port int) error {
 		})
 	})
 
-	http.HandleFunc("/stop", func(w http.ResponseWriter, r *http.Request) {
+	m.HandleFunc("/stop", func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, "Finished!")
 		go func() {
 			time.Sleep(100 * time.Millisecond)
@@ -295,16 +298,16 @@ func ServeHTTP(port int) error {
 		}()
 	})
 
-	http.HandleFunc("/screenshot", func(w http.ResponseWriter, r *http.Request) {
+	m.HandleFunc("/screenshot", func(w http.ResponseWriter, r *http.Request) {
 		imagePath := "/data/local/tmp/minicap-screenshot.jpg"
 		if err := Screenshot(imagePath); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		http.ServeFile(w, r, imagePath)
-	})
+	}).Methods("GET")
 
-	http.HandleFunc("/upload", func(w http.ResponseWriter, r *http.Request) {
+	m.HandleFunc("/upload", func(w http.ResponseWriter, r *http.Request) {
 		url := r.FormValue("url")
 		filepath := r.FormValue("filepath")
 		res, err := goreq.Request{
@@ -322,7 +325,7 @@ func ServeHTTP(port int) error {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		di := NewDownloadProxy(file)
+		di := newDownloadProxy(file)
 		fmt.Sscanf(res.Header.Get("Content-Length"), "%d", &di.TotalSize)
 		downloadKey := downManager.Put(di)
 		go func() {
@@ -334,20 +337,20 @@ func ServeHTTP(port int) error {
 		io.WriteString(w, downloadKey)
 	})
 
-	http.HandleFunc("/uploadStats", func(w http.ResponseWriter, r *http.Request) {
+	m.HandleFunc("/uploadStats", func(w http.ResponseWriter, r *http.Request) {
 		key := r.FormValue("key")
 		di := downManager.Get(key)
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		json.NewEncoder(w).Encode(di)
-	})
+	}).Methods("GET")
 
-	http.HandleFunc("/install", func(w http.ResponseWriter, r *http.Request) {
+	m.HandleFunc("/install", func(w http.ResponseWriter, r *http.Request) {
 		url := r.FormValue("url")
 		filepath := r.FormValue("filepath")
 		if filepath == "" {
 			filepath = "/sdcard/tmp.apk"
 		}
-		di, err := AsyncDownloadInto(url, filepath, false) // use false to disable DownloadProxy auto recycle
+		di, err := AsyncDownloadTo(url, filepath, false) // use false to disable DownloadProxy auto recycle
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -355,7 +358,7 @@ func ServeHTTP(port int) error {
 		go func() {
 			di.Wait() // wait download finished
 			if runtime.GOOS == "windows" {
-				log.Println("fake am install")
+				log.Println("fake pm install")
 				downManager.Del(di.Id)
 				return
 			}
@@ -363,15 +366,20 @@ func ServeHTTP(port int) error {
 			output, err := runShell("pm", "install", "-r", "-g", filepath)
 			if err != nil {
 				di.Error = err.Error() + " >> " + string(output)
-				downManager.DelayDel(di.Id, time.Minute*10)
-			} else {
-				downManager.Del(di.Id)
 			}
+			downManager.DelayDel(di.Id, time.Minute*5)
 		}()
 		io.WriteString(w, di.Id)
+	}).Methods("POST")
+
+	m.HandleFunc("/install/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := mux.Vars(r)["id"]
+		dp := downManager.Get(id)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(dp)
 	})
 
-	return http.ListenAndServe(":"+strconv.Itoa(port), nil)
+	return http.ListenAndServe(":"+strconv.Itoa(port), m)
 }
 
 func dnsLookupHost(hostname string) (ip net.IP, err error) {
