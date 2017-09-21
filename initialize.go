@@ -18,6 +18,7 @@ var (
 	owner      = "openatx"
 	repo       = "atx-agent"
 	listenPort int
+	httpServer *http.Server
 )
 
 func dnsLookupHost(hostname string) (ip net.IP, err error) {

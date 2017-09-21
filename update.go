@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -101,12 +102,9 @@ func doUpdate(version string) (err error) {
 	if err != nil {
 		return err
 	}
-	if _, ok := checksums[filename]; !ok {
+	checksum, ok := checksums[filename]
+	if !ok {
 		return fmt.Errorf("checksums not found for file: %s", filename)
-	}
-	checksum, err := hex.DecodeString(checksums[filename])
-	if err != nil {
-		return err
 	}
 	// fixed get latest version
 	uri := formatString("https://github.com/{owner}/{repo}/releases/download/{version}/{filename}", map[string]string{
@@ -133,6 +131,7 @@ func doUpdate(version string) (err error) {
 	if err != nil {
 		return err
 	}
+	hasher := sha256.New()
 	progressR := &ioprogress.Reader{
 		Reader:   res.Body,
 		Size:     int64(contentLength),
@@ -144,13 +143,19 @@ func doUpdate(version string) (err error) {
 	if err != nil {
 		return err
 	}
-	io.Copy(f, progressR)
+	writer := io.MultiWriter(f, hasher)
+	io.Copy(writer, progressR)
 	if err = f.Close(); err != nil {
 		return err
+	}
+	realChecksum := hex.EncodeToString(hasher.Sum(nil))
+	if realChecksum != checksum {
+		return fmt.Errorf("update file checksum wrong, expected: %s, got: %s", checksum, realChecksum)
 	}
 	if err = archiver.TarGz.Open(distPath, tmpdir); err != nil {
 		return err
 	}
-	err, _ = update.New().VerifyChecksum(checksum).FromFile(filepath.Join(tmpdir, repo))
+	log.Println("perform updating")
+	err, _ = update.New().FromFile(filepath.Join(tmpdir, repo))
 	return err
 }

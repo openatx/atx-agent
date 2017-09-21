@@ -150,7 +150,19 @@ func Screenshot(filename string) (err error) {
 }
 
 func safeRunUiautomator() {
-	runUiautomator()
+	retry := 5
+	for retry > 0 {
+		retry--
+		start := time.Now()
+		if err := runUiautomator(); err != nil {
+			log.Printf("uiautomator quit: %v", err)
+		}
+		if time.Since(start) > 3*time.Minute {
+			retry = 5
+		}
+		time.Sleep(2 * time.Second)
+	}
+	log.Println("uiautomator can not started")
 }
 
 func runUiautomator() error {
@@ -271,7 +283,7 @@ func ServeHTTP(port int) error {
 	m := mux.NewRouter()
 
 	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "Hello World!")
+		io.WriteString(w, "atx-agent version "+version)
 	})
 
 	m.HandleFunc("/shell", func(w http.ResponseWriter, r *http.Request) {
@@ -289,10 +301,7 @@ func ServeHTTP(port int) error {
 
 	m.HandleFunc("/stop", func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, "Finished!")
-		go func() {
-			time.Sleep(100 * time.Millisecond)
-			os.Exit(0)
-		}()
+		go httpServer.Shutdown(nil)
 	})
 
 	m.HandleFunc("/screenshot", func(w http.ResponseWriter, r *http.Request) {
@@ -376,6 +385,10 @@ func ServeHTTP(port int) error {
 		json.NewEncoder(w).Encode(dp)
 	})
 
+	m.HandleFunc("/version", func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, version)
+	})
+
 	m.HandleFunc("/upgrade", func(w http.ResponseWriter, r *http.Request) {
 		ver := r.FormValue("version")
 		var err error
@@ -386,16 +399,27 @@ func ServeHTTP(port int) error {
 				return
 			}
 		}
+		if ver == version {
+			io.WriteString(w, "current version is already "+version)
+			return
+		}
 		err = doUpdate(ver)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
 		io.WriteString(w, "update finished, restarting")
-		go runDaemon()
+		go func() {
+			log.Printf("restarting server")
+			runDaemon()
+		}()
 	})
 
-	return http.ListenAndServe(":"+strconv.Itoa(port), m)
+	http.Handle("/", m)
+	httpServer = &http.Server{
+		Addr: ":" + strconv.Itoa(port),
+	}
+	return httpServer.ListenAndServe()
 }
 
 func runDaemon() {
@@ -430,6 +454,7 @@ func main() {
 
 	if *daemon {
 		runDaemon()
+		return
 	}
 
 	if os.Getenv("IGNORE_SIGHUP") == "true" {
@@ -439,15 +464,24 @@ func main() {
 			panic(err)
 		}
 		defer f.Close()
+
+		os.Stdout = f
+		os.Stderr = f
+		os.Stdin = nil
+
 		log.SetOutput(f)
+		log.SetFlags(log.LstdFlags | log.Lshortfile)
 		log.Println("Ignore SIGUP")
 		signal.Ignore(syscall.SIGHUP)
 
 		// kill previous daemon first
-		_, err = http.Get(fmt.Sprintf("http://localhost:%d/stop", listenPort))
+		log.Println("Kill server")
+		_, err = http.Get(fmt.Sprintf("http://127.0.0.1:%d/stop", listenPort))
 		if err == nil {
 			log.Println("wait previous server stopped")
-			time.Sleep(500 * time.Millisecond) // server will quit in 0.1s
+			time.Sleep(1000 * time.Millisecond) // server will quit in 0.1s
+		} else {
+			log.Println(err)
 		}
 	}
 
@@ -460,5 +494,7 @@ func main() {
 	}
 
 	go safeRunUiautomator()
-	log.Fatal(ServeHTTP(listenPort))
+	if err := ServeHTTP(listenPort); err != nil {
+		log.Println("server quit:", err)
+	}
 }
