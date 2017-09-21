@@ -1,9 +1,7 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -24,7 +22,6 @@ import (
 	"github.com/codeskyblue/kexec"
 	"github.com/franela/goreq"
 	"github.com/gorilla/mux"
-	"github.com/miekg/dns"
 )
 
 // Get preferred outbound ip of this machine
@@ -379,81 +376,52 @@ func ServeHTTP(port int) error {
 		json.NewEncoder(w).Encode(dp)
 	})
 
+	m.HandleFunc("/upgrade", func(w http.ResponseWriter, r *http.Request) {
+		ver := r.FormValue("version")
+		var err error
+		if ver == "" {
+			ver, err = getLatestVersion()
+			if err != nil {
+				http.Error(w, err.Error(), 500)
+				return
+			}
+		}
+		err = doUpdate(ver)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		io.WriteString(w, "update finished, restarting")
+		go runDaemon()
+	})
+
 	return http.ListenAndServe(":"+strconv.Itoa(port), m)
 }
 
-func dnsLookupHost(hostname string) (ip net.IP, err error) {
-	if !strings.HasSuffix(hostname, ".") {
-		hostname += "."
+func runDaemon() {
+	environ := os.Environ()
+	environ = append(environ, "IGNORE_SIGHUP=true")
+	cmd := kexec.Command(os.Args[0], "-p", strconv.Itoa(listenPort))
+	cmd.Env = environ
+	cmd.Start()
+	select {
+	case err := <-GoFunc(cmd.Wait):
+		log.Fatalf("server started failed, %v", err)
+	case <-time.After(200 * time.Millisecond):
+		fmt.Printf("server started, listening on %v:%d\n", mustGetOoutboundIP(), listenPort)
 	}
-	m1 := new(dns.Msg)
-	m1.Id = dns.Id()
-	m1.RecursionDesired = true
-	m1.Question = []dns.Question{
-		{hostname, dns.TypeA, dns.ClassINET},
-	}
-	c := new(dns.Client)
-	c.SingleInflight = true
-	in, _, err := c.Exchange(m1, "8.8.8.8:53")
-	if err != nil {
-		return nil, err
-	}
-	if len(in.Answer) == 0 {
-		return nil, errors.New("dns return empty answer")
-	}
-	log.Println(in.Answer[0])
-	if t, ok := in.Answer[0].(*dns.A); ok {
-		return t.A, nil
-	}
-	if t, ok := in.Answer[0].(*dns.CNAME); ok {
-		return dnsLookupHost(t.Target)
-	}
-	return nil, errors.New("dns resolve failed: " + hostname)
-}
-
-func initialHTTPTransport() {
-	dialer := &net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
-		DualStack: true,
-	}
-	// manualy dns resolve
-	newDialContext := func(ctx context.Context, network, addr string) (net.Conn, error) {
-		host, port, _ := net.SplitHostPort(addr)
-		if net.ParseIP(host) == nil {
-			ip, err := dnsLookupHost(host)
-			if err != nil {
-				return nil, err
-			}
-			addr = ip.String() + ":" + port
-		}
-		return dialer.DialContext(ctx, network, addr)
-	}
-	http.DefaultTransport.(*http.Transport).DialContext = newDialContext
-	goreq.DefaultTransport.(*http.Transport).DialContext = newDialContext
-}
-
-type WriterCounter struct {
-	wr         io.Writer
-	totalCount int
-}
-
-func NewWriterCounter(wr io.Writer) *WriterCounter {
-	return &WriterCounter{wr: wr}
-}
-
-func (w *WriterCounter) Write(data []byte) (int, error) {
-	n, err := w.Write(data)
-	w.totalCount += n
-	return n, err
 }
 
 func main() {
 	daemon := flag.Bool("d", false, "run daemon")
-	port := flag.Int("p", 7912, "listen port") // Create on 2017/09/12
+	flag.IntVar(&listenPort, "p", 7912, "listen port") // Create on 2017/09/12
+	showVersion := flag.Bool("v", false, "show version")
 	flag.Parse()
 
-	initialHTTPTransport()
+	if *showVersion {
+		fmt.Println(version)
+		return
+	}
 
 	log.Println("Check environment")
 	if err := InstallRequirements(); err != nil {
@@ -461,18 +429,7 @@ func main() {
 	}
 
 	if *daemon {
-		environ := os.Environ()
-		environ = append(environ, "IGNORE_SIGHUP=true")
-		cmd := kexec.Command(os.Args[0])
-		cmd.Env = environ
-		cmd.Start()
-		select {
-		case err := <-GoFunc(cmd.Wait):
-			log.Fatalf("server started failed, %v", err)
-		case <-time.After(200 * time.Millisecond):
-			fmt.Printf("server started, listening on %v:%d\n", mustGetOoutboundIP(), *port)
-		}
-		return
+		runDaemon()
 	}
 
 	if os.Getenv("IGNORE_SIGHUP") == "true" {
@@ -485,15 +442,23 @@ func main() {
 		log.SetOutput(f)
 		log.Println("Ignore SIGUP")
 		signal.Ignore(syscall.SIGHUP)
-	} else {
-		outIp, err := getOutboundIP()
+
+		// kill previous daemon first
+		_, err = http.Get(fmt.Sprintf("http://localhost:%d/stop", listenPort))
 		if err == nil {
-			fmt.Printf("IP: %v\n", outIp)
-		} else {
-			fmt.Printf("Internet is not connected.")
+			log.Println("wait previous server stopped")
+			time.Sleep(500 * time.Millisecond) // server will quit in 0.1s
 		}
 	}
 
+	// show ip
+	outIp, err := getOutboundIP()
+	if err == nil {
+		fmt.Printf("IP: %v\n", outIp)
+	} else {
+		fmt.Printf("Internet is not connected.")
+	}
+
 	go safeRunUiautomator()
-	log.Fatal(ServeHTTP(*port))
+	log.Fatal(ServeHTTP(listenPort))
 }

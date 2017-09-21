@@ -2,9 +2,11 @@ builds:
   -
     goos:
       - linux
+      - windows
     goarch:
       - amd64
       - arm
+      - 386
     goarm:
       - 6
       - 7

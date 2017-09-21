@@ -14,3 +14,5 @@
 .glide/
 *_vfsdata.go
 atx-agent
+*.tmp/
+*.exe.old
