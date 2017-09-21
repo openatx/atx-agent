@@ -1,4 +1,6 @@
 # atx-agent
+[![Build Status](https://travis-ci.org/openatx/atx-agent.svg?branch=master)](https://travis-ci.org/openatx/atx-agent)
+
 HTTP Server runs on android device
 
 运行再Android手机上的http服务器，旨在希望通过Wifi控制手机，完成手机的自动化功能。
