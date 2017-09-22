@@ -8,6 +8,8 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -316,10 +318,10 @@ func ServeHTTP(port int) error {
 			command = r.FormValue("c")
 		}
 		output, err := exec.Command("sh", "-c", command).CombinedOutput()
-		log.Println(err)
 		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"output": string(output),
+			"error":  err,
 		})
 	})
 
@@ -445,6 +447,10 @@ func ServeHTTP(port int) error {
 		}()
 	})
 
+	target, _ := url.Parse("http://127.0.0.1:9008")
+	uiautomatorProxy := httputil.NewSingleHostReverseProxy(target)
+	http.Handle("/jsonrpc/0", uiautomatorProxy)
+	http.Handle("/ping", uiautomatorProxy)
 	http.Handle("/", m)
 	httpServer = &http.Server{
 		Addr: ":" + strconv.Itoa(port),
@@ -471,6 +477,8 @@ func main() {
 	flag.IntVar(&listenPort, "p", 7912, "listen port") // Create on 2017/09/12
 	showVersion := flag.Bool("v", false, "show version")
 	flag.Parse()
+
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
 	if *showVersion {
 		fmt.Println(version)
@@ -500,7 +508,6 @@ func main() {
 		os.Stdin = nil
 
 		log.SetOutput(f)
-		log.SetFlags(log.LstdFlags | log.Lshortfile)
 		log.Println("Ignore SIGUP")
 		signal.Ignore(syscall.SIGHUP)
 
