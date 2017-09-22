@@ -90,6 +90,29 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
+var (
+	propOnce   sync.Once
+	properties map[string]string
+)
+
+func getProperty(name string) string {
+	propOnce.Do(func() {
+		properties = make(map[string]string)
+		propOutput, err := runShell("getprop")
+		if err != nil {
+			panic(err)
+		}
+		re := regexp.MustCompile(`\[(.*?)\]:\s*\[(.*?)\]`)
+		matches := re.FindAllStringSubmatch(string(propOutput), -1)
+		for _, m := range matches {
+			var key = m[1]
+			var val = m[2]
+			properties[key] = val
+		}
+	})
+	return properties[name]
+}
+
 func InstallRequirements() error {
 	if runtime.GOOS == "windows" {
 		return nil
@@ -221,6 +244,7 @@ type DownloadProxy struct {
 	Id         string `json:"id"`
 	TotalSize  int    `json:"titalSize"`
 	CopiedSize int    `json:"copiedSize"`
+	Message    string `json:"message"`
 	Error      string `json:"error,omitempty"`
 	wg         sync.WaitGroup
 }
@@ -313,42 +337,35 @@ func ServeHTTP(port int) error {
 		http.ServeFile(w, r, imagePath)
 	}).Methods("GET")
 
-	m.HandleFunc("/upload", func(w http.ResponseWriter, r *http.Request) {
-		url := r.FormValue("url")
-		filepath := r.FormValue("filepath")
-		res, err := goreq.Request{
-			Uri:             url,
-			MaxRedirects:    10,
-			RedirectHeaders: true,
-		}.Do()
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		file, err := os.Create(filepath)
-		if err != nil {
-			res.Body.Close()
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		di := newDownloadProxy(file)
-		fmt.Sscanf(res.Header.Get("Content-Length"), "%d", &di.TotalSize)
-		downloadKey := downManager.Put(di)
-		go func() {
-			defer downManager.Del(downloadKey)
-			defer res.Body.Close()
-			defer file.Close()
-			io.Copy(di, res.Body)
-		}()
-		io.WriteString(w, downloadKey)
-	})
-
-	m.HandleFunc("/uploadStats", func(w http.ResponseWriter, r *http.Request) {
-		key := r.FormValue("key")
-		di := downManager.Get(key)
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		json.NewEncoder(w).Encode(di)
-	}).Methods("GET")
+	// m.HandleFunc("/upload", func(w http.ResponseWriter, r *http.Request) {
+	// 	url := r.FormValue("url")
+	// 	filepath := r.FormValue("filepath")
+	// 	res, err := goreq.Request{
+	// 		Uri:             url,
+	// 		MaxRedirects:    10,
+	// 		RedirectHeaders: true,
+	// 	}.Do()
+	// 	if err != nil {
+	// 		http.Error(w, err.Error(), http.StatusInternalServerError)
+	// 		return
+	// 	}
+	// 	file, err := os.Create(filepath)
+	// 	if err != nil {
+	// 		res.Body.Close()
+	// 		http.Error(w, err.Error(), http.StatusInternalServerError)
+	// 		return
+	// 	}
+	// 	di := newDownloadProxy(file)
+	// 	fmt.Sscanf(res.Header.Get("Content-Length"), "%d", &di.TotalSize)
+	// 	downloadKey := downManager.Put(di)
+	// 	go func() {
+	// 		defer downManager.Del(downloadKey)
+	// 		defer res.Body.Close()
+	// 		defer file.Close()
+	// 		io.Copy(di, res.Body)
+	// 	}()
+	// 	io.WriteString(w, downloadKey)
+	// })
 
 	m.HandleFunc("/install", func(w http.ResponseWriter, r *http.Request) {
 		url := r.FormValue("url")
@@ -361,6 +378,7 @@ func ServeHTTP(port int) error {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		di.Message = "downloading"
 		go func() {
 			di.Wait() // wait download finished
 			if runtime.GOOS == "windows" {
@@ -368,10 +386,22 @@ func ServeHTTP(port int) error {
 				downManager.Del(di.Id)
 				return
 			}
+
 			// -g: grant all runtime permissions
-			output, err := runShell("pm", "install", "-r", "-g", filepath)
+			// -d: allow version code downgrade
+			// -r: replace existing application
+			di.Message = "installing"
+			sdk, _ := strconv.Atoi(getProperty("ro.build.version.sdk"))
+			cmds := []string{"pm", "install", "-d", "-r", filepath}
+			if sdk >= 23 { // android 6.0
+				cmds = []string{"pm", "install", "-d", "-r", "-g", filepath}
+			}
+			output, err := runShell(cmds...)
 			if err != nil {
-				di.Error = err.Error() + " >> " + string(output)
+				di.Error = err.Error()
+				di.Message = string(output)
+			} else {
+				di.Message = "success installed"
 			}
 			downManager.DelayDel(di.Id, time.Minute*5)
 		}()

@@ -33,6 +33,21 @@ $ curl 10.0.0.1:7912/version
 # expect example: 0.0.2
 ```
 
+## 安装应用
+```bash
+$ curl -X POST -d url="http://some-host/some.apk" 10.0.0.1:7912/install
+# expect install id
+2
+# get install progress
+$ curl -X GET 10.0.0.1:7912/install/1
+{
+    "id": "2",
+    "titalSize": 770571,
+    "copiedSize": 770571,
+    "message": "success installed"
+}
+```
+
 ## 程序自升级
 升级程序从gihub releases里面直接下载，升级完后自动重启
 
