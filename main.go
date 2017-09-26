@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -122,6 +123,7 @@ func InstallRequirements() error {
 	if fileExists("/data/local/tmp/minicap") && fileExists("/data/local/tmp/minicap.so") && Screenshot("/dev/null") == nil {
 		return nil
 	}
+	log.Println("install minicap")
 	minicapSource := "https://github.com/codeskyblue/stf-binaries/raw/master/node_modules/minicap-prebuilt/prebuilt"
 	propOutput, err := runShell("getprop")
 	if err != nil {
@@ -175,6 +177,9 @@ func Screenshot(filename string) (err error) {
 }
 
 func safeRunUiautomator() {
+	if runtime.GOOS == "windows" {
+		return
+	}
 	retry := 5
 	for retry > 0 {
 		retry--
@@ -339,35 +344,36 @@ func ServeHTTP(port int) error {
 		http.ServeFile(w, r, imagePath)
 	}).Methods("GET")
 
-	// m.HandleFunc("/upload", func(w http.ResponseWriter, r *http.Request) {
-	// 	url := r.FormValue("url")
-	// 	filepath := r.FormValue("filepath")
-	// 	res, err := goreq.Request{
-	// 		Uri:             url,
-	// 		MaxRedirects:    10,
-	// 		RedirectHeaders: true,
-	// 	}.Do()
-	// 	if err != nil {
-	// 		http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 		return
-	// 	}
-	// 	file, err := os.Create(filepath)
-	// 	if err != nil {
-	// 		res.Body.Close()
-	// 		http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 		return
-	// 	}
-	// 	di := newDownloadProxy(file)
-	// 	fmt.Sscanf(res.Header.Get("Content-Length"), "%d", &di.TotalSize)
-	// 	downloadKey := downManager.Put(di)
-	// 	go func() {
-	// 		defer downManager.Del(downloadKey)
-	// 		defer res.Body.Close()
-	// 		defer file.Close()
-	// 		io.Copy(di, res.Body)
-	// 	}()
-	// 	io.WriteString(w, downloadKey)
-	// })
+	m.HandleFunc("/upload/{filepath:.*}", func(w http.ResponseWriter, r *http.Request) {
+		filepath := mux.Vars(r)["filepath"]
+		if runtime.GOOS != "windows" {
+			filepath = "/" + filepath
+		}
+		file, header, err := r.FormFile("file")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		defer func() {
+			file.Close()
+			r.MultipartForm.RemoveAll()
+		}()
+		if strings.HasSuffix(filepath, "/") {
+			filepath = path.Join(filepath, header.Filename)
+		}
+		target, err := os.Create(filepath)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer target.Close()
+		written, err := io.Copy(target, file)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		fmt.Fprintf(w, "copied %d bytes into %s", written, filepath)
+	})
 
 	m.HandleFunc("/install", func(w http.ResponseWriter, r *http.Request) {
 		url := r.FormValue("url")
@@ -451,6 +457,19 @@ func ServeHTTP(port int) error {
 	uiautomatorProxy := httputil.NewSingleHostReverseProxy(target)
 	http.Handle("/jsonrpc/0", uiautomatorProxy)
 	http.Handle("/ping", uiautomatorProxy)
+	http.HandleFunc("/screenshot/0", func(w http.ResponseWriter, r *http.Request) {
+		if r.FormValue("minicap") == "false" {
+			uiautomatorProxy.ServeHTTP(w, r)
+			return
+		}
+		imagePath := "/data/local/tmp/minicap-screenshot.jpg"
+		if err := Screenshot(imagePath); err != nil {
+			log.Printf("screenshot[minicap] error: %v", err)
+			uiautomatorProxy.ServeHTTP(w, r)
+		} else {
+			http.ServeFile(w, r, imagePath)
+		}
+	})
 	http.Handle("/", m)
 	httpServer = &http.Server{
 		Addr: ":" + strconv.Itoa(port),
@@ -473,24 +492,35 @@ func runDaemon() {
 }
 
 func main() {
-	daemon := flag.Bool("d", false, "run daemon")
+	fDaemon := flag.Bool("d", false, "run daemon")
 	flag.IntVar(&listenPort, "p", 7912, "listen port") // Create on 2017/09/12
-	showVersion := flag.Bool("v", false, "show version")
+	fVersion := flag.Bool("v", false, "show version")
+	fStop := flag.Bool("stop", false, "stop server")
 	flag.Parse()
 
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 
-	if *showVersion {
+	if *fVersion {
 		fmt.Println(version)
 		return
 	}
 
-	log.Println("Check environment")
+	if *fStop {
+		_, err := http.Get("http://127.0.0.1:7912/stop")
+		if err != nil {
+			log.Println(err)
+		} else {
+			log.Println("server stopped")
+		}
+		return
+	}
+
+	log.Println("check dependencies")
 	if err := InstallRequirements(); err != nil {
 		panic(err)
 	}
 
-	if *daemon {
+	if *fDaemon {
 		runDaemon()
 		return
 	}

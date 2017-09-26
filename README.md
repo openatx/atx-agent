@@ -19,33 +19,45 @@ $ adb shell /data/local/tmp/atx-agent -d
 默认监听的端口是7912。
 
 # 常用接口
-假设手机的ip是10.0.0.1
+假设手机的地址是$DEVICE_URL (eg: `http://10.0.0.1:7912`)
 
 ## 获取手机截图
 ```bash
-$ curl 10.0.0.1:7912/screenshot
 # jpeg format image
+$ curl $DEVICE_URL/screenshot
+
+# 使用内置的uiautomator截图
+$ curl "$DEVICE_URL/screenshot/0?minicap=false"
 ```
 
 ## 获取当前程序版本
 ```bash
-$ curl 10.0.0.1:7912/version
+$ curl $DEVICE_URL/version
 # expect example: 0.0.2
 ```
 
 ## 安装应用
 ```bash
-$ curl -X POST -d url="http://some-host/some.apk" 10.0.0.1:7912/install
+$ curl -X POST -d url="http://some-host/some.apk" $DEVICE_URL/install
 # expect install id
 2
 # get install progress
-$ curl -X GET 10.0.0.1:7912/install/1
+$ curl -X GET $DEVICE_URL/install/1
 {
     "id": "2",
     "titalSize": 770571,
     "copiedSize": 770571,
     "message": "success installed"
 }
+```
+
+## 上传文件
+```bash
+# 上传到/sdcard目录下 (url以/结尾)
+$ curl -F "file=@somefile.txt" $DEVICE_URL/upload/sdcard/
+
+# 上传到/sdcard/tmp.txt
+$ curl -F "file=@somefile.txt" $DEVICE_URL/upload/sdcard/tmp.txt
 ```
 
 ## 程序自升级
