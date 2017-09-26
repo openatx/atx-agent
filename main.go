@@ -249,7 +249,7 @@ func (m *DownloadManager) DelayDel(id string, sleep time.Duration) {
 type DownloadProxy struct {
 	writer     io.Writer
 	Id         string `json:"id"`
-	TotalSize  int    `json:"titalSize"`
+	TotalSize  int    `json:"totalSize"`
 	CopiedSize int    `json:"copiedSize"`
 	Message    string `json:"message"`
 	Error      string `json:"error,omitempty"`
