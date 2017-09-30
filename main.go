@@ -2,9 +2,12 @@ package main
 
 import (
 	"encoding/json"
+
 	"flag"
 	"fmt"
+	"html/template"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -25,6 +28,9 @@ import (
 	"github.com/codeskyblue/kexec"
 	"github.com/franela/goreq"
 	"github.com/gorilla/mux"
+	"github.com/openatx/androidutils"
+	"github.com/pkg/errors"
+	"github.com/shogo82148/androidbinary/apk"
 )
 
 // Get preferred outbound ip of this machine
@@ -42,7 +48,8 @@ func getOutboundIP() (ip net.IP, err error) {
 func mustGetOoutboundIP() net.IP {
 	ip, err := getOutboundIP()
 	if err != nil {
-		panic(err)
+		return net.ParseIP("127.0.0.1")
+		// panic(err)
 	}
 	return ip
 }
@@ -63,6 +70,10 @@ type MinicapInfo struct {
 }
 
 func runShell(args ...string) (output []byte, err error) {
+	return exec.Command("sh", "-c", strings.Join(args, " ")).CombinedOutput()
+}
+
+func runShellOutput(args ...string) (output []byte, err error) {
 	return exec.Command("sh", "-c", strings.Join(args, " ")).Output()
 }
 
@@ -85,7 +96,9 @@ func httpDownload(path string, urlStr string, perms os.FileMode) (written int64,
 		return
 	}
 	defer file.Close()
-	return io.Copy(file, resp.Body)
+	written, err = io.Copy(file, resp.Body)
+	log.Println("http download:", written)
+	return
 }
 
 func fileExists(path string) bool {
@@ -116,14 +129,95 @@ func getProperty(name string) string {
 	return properties[name]
 }
 
-func InstallRequirements() error {
+func installRequirements() error {
+	return installMinicap()
+}
+
+const (
+	apkVersionCode = 4
+	apkVersionName = "1.0.4"
+)
+
+func checkUiautomatorInstalled() (ok bool) {
+	pi, err := androidutils.StatPackage("com.github.uiautomator")
+	if err != nil {
+		return
+	}
+	if pi.Version.Code < apkVersionCode {
+		return
+	}
+	_, err = androidutils.StatPackage("com.github.uiautomator.test")
+	return err == nil
+}
+
+func installAPK(path string) error {
+	out, err := runShell("pm", "install", "-d", "-r", path)
+	if err != nil {
+		matches := regexp.MustCompile(`Failure \[([\w_]+)\]`).FindStringSubmatch(string(out))
+		if len(matches) > 0 {
+			return errors.Wrap(err, matches[0])
+		}
+		return err
+	}
+	return nil
+}
+
+func installAPKForce(path string) error {
+	err := installAPK(path)
+	if err == nil {
+		return nil
+	}
+	if !strings.Contains(err.Error(), "INSTALL_FAILED_UPDATE_INCOMPATIBLE") {
+		return err
+	}
+	pkg, er := apk.OpenFile(path)
+	if er != nil {
+		return errors.Wrap(err, er.Error())
+	}
+	defer pkg.Close()
+	runShell("pm", "uninstall", pkg.PackageName())
+	return installAPK(path)
+}
+
+func installUiautomatorAPK() error {
 	if runtime.GOOS == "windows" {
 		return nil
 	}
-	if fileExists("/data/local/tmp/minicap") && fileExists("/data/local/tmp/minicap.so") && Screenshot("/dev/null") == nil {
+	if checkUiautomatorInstalled() {
 		return nil
 	}
+	baseURL := "https://github.com/openatx/android-uiautomator-server/releases/download/" + apkVersionName
+	if _, err := httpDownload("/data/local/tmp/app-debug.apk", baseURL+"/app-uiautomator.apk", 0644); err != nil {
+		return err
+	}
+	if _, err := httpDownload("/data/local/tmp/app-debug-test.apk", baseURL+"/app-uiautomator-test.apk", 0644); err != nil {
+		return err
+	}
+	if err := installAPKForce("/data/local/tmp/app-debug.apk"); err != nil {
+		return err
+	}
+	if err := installAPKForce("/data/local/tmp/app-debug-test.apk"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func installMinicap() error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	log.Println("install uiautomator apk")
+	if err := installUiautomatorAPK(); err != nil {
+		return err
+	}
 	log.Println("install minicap")
+	if fileExists("/data/local/tmp/minicap") && fileExists("/data/local/tmp/minicap.so") {
+		if err := Screenshot("/dev/null"); err != nil {
+			log.Println("err:", err)
+		} else {
+			return nil
+		}
+	}
 	minicapSource := "https://github.com/codeskyblue/stf-binaries/raw/master/node_modules/minicap-prebuilt/prebuilt"
 	propOutput, err := runShell("getprop")
 	if err != nil {
@@ -157,7 +251,7 @@ func InstallRequirements() error {
 }
 
 func Screenshot(filename string) (err error) {
-	output, err := runShell("LD_LIBRARY_PATH=/data/local/tmp", "/data/local/tmp/minicap", "-i")
+	output, err := runShellOutput("LD_LIBRARY_PATH=/data/local/tmp", "/data/local/tmp/minicap", "-i")
 	if err != nil {
 		return
 	}
@@ -314,7 +408,13 @@ func ServeHTTP(port int) error {
 	m := mux.NewRouter()
 
 	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, "atx-agent version "+version)
+		file, err := Assets.Open("index.html")
+		if err != nil {
+			http.Error(w, "404 page not found", 404)
+			return
+		}
+		content, _ := ioutil.ReadAll(file)
+		template.Must(template.New("index").Parse(string(content))).Execute(w, nil)
 	})
 
 	m.HandleFunc("/shell", func(w http.ResponseWriter, r *http.Request) {
@@ -496,6 +596,7 @@ func main() {
 	flag.IntVar(&listenPort, "p", 7912, "listen port") // Create on 2017/09/12
 	fVersion := flag.Bool("v", false, "show version")
 	fStop := flag.Bool("stop", false, "stop server")
+	fTunnelServer := flag.String("t", "", "tunnel server address")
 	flag.Parse()
 
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
@@ -516,8 +617,9 @@ func main() {
 	}
 
 	log.Println("check dependencies")
-	if err := InstallRequirements(); err != nil {
-		panic(err)
+	if err := installRequirements(); err != nil {
+		// panic(err)
+		log.Println("requirements not ready:", err)
 	}
 
 	if *fDaemon {
@@ -555,12 +657,15 @@ func main() {
 	// show ip
 	outIp, err := getOutboundIP()
 	if err == nil {
-		fmt.Printf("IP: %v\n", outIp)
+		fmt.Printf("Listen on http://%v:%d\n", outIp, listenPort)
 	} else {
 		fmt.Printf("Internet is not connected.")
 	}
 
 	go safeRunUiautomator()
+	if *fTunnelServer != "" {
+		go runTunnelProxy(*fTunnelServer)
+	}
 	if err := ServeHTTP(listenPort); err != nil {
 		log.Println("server quit:", err)
 	}
