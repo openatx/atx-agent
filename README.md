@@ -78,6 +78,7 @@ $ curl "10.0.0.1:7912/upgrade?version=0.0.2"
 # TODO
 1. 目前安全性还是个问题，以后再想办法改善
 2. 补全接口文档
+3. 内置的网页adb shell的安全问题
 
 # Logs
 log path `/sdcard/atx-agent.log`
@@ -85,6 +86,14 @@ log path `/sdcard/atx-agent.log`
 # Build from source
 ```bash
 GOOS=linux GOARCH=arm go build
+```
+
+with html resource buildin
+
+```bash
+go get github.com/shurcooL/vfsgen
+go generate
+go build -tags vfs
 ```
 
 # LICENSE

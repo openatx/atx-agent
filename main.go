@@ -553,6 +553,8 @@ func ServeHTTP(port int) error {
 		}()
 	})
 
+	m.HandleFunc("/term", handleTerminalWebsocket)
+
 	target, _ := url.Parse("http://127.0.0.1:9008")
 	uiautomatorProxy := httputil.NewSingleHostReverseProxy(target)
 	http.Handle("/jsonrpc/0", uiautomatorProxy)
@@ -570,6 +572,7 @@ func ServeHTTP(port int) error {
 			http.ServeFile(w, r, imagePath)
 		}
 	})
+	http.Handle("/assets/", http.FileServer(Assets))
 	http.Handle("/", m)
 	httpServer = &http.Server{
 		Addr: ":" + strconv.Itoa(port),
