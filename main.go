@@ -582,8 +582,10 @@ func ServeHTTP(port int) error {
 
 func runDaemon() {
 	environ := os.Environ()
-	environ = append(environ, "IGNORE_SIGHUP=true")
-	cmd := kexec.Command(os.Args[0], "-p", strconv.Itoa(listenPort))
+	// env:IGNORE_SIGHUP forward stdout and stderr to file
+	// env:ATX_AGENT will ignore -d flag
+	environ = append(environ, "IGNORE_SIGHUP=true", "ATX_AGENT=1")
+	cmd := kexec.Command(os.Args[0], os.Args[1:]...)
 	cmd.Env = environ
 	cmd.Start()
 	select {
@@ -625,7 +627,7 @@ func main() {
 		log.Println("requirements not ready:", err)
 	}
 
-	if *fDaemon {
+	if *fDaemon && os.Getenv("ATX_AGENT") == "" {
 		runDaemon()
 		return
 	}
