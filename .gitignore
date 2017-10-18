@@ -16,3 +16,4 @@
 atx-agent
 *.tmp/
 *.exe.old
+*.apk

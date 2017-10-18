@@ -130,6 +130,10 @@ func getProperty(name string) string {
 }
 
 func installRequirements() error {
+	log.Println("install uiautomator apk")
+	if err := installUiautomatorAPK(); err != nil {
+		return err
+	}
 	return installMinicap()
 }
 
@@ -206,10 +210,6 @@ func installMinicap() error {
 	if runtime.GOOS == "windows" {
 		return nil
 	}
-	log.Println("install uiautomator apk")
-	if err := installUiautomatorAPK(); err != nil {
-		return err
-	}
 	log.Println("install minicap")
 	if fileExists("/data/local/tmp/minicap") && fileExists("/data/local/tmp/minicap.so") {
 		if err := Screenshot("/dev/null"); err != nil {
@@ -268,35 +268,6 @@ func Screenshot(filename string) (err error) {
 		return
 	}
 	return nil
-}
-
-func safeRunUiautomator() {
-	if runtime.GOOS == "windows" {
-		return
-	}
-	retry := 5
-	for retry > 0 {
-		retry--
-		start := time.Now()
-		if err := runUiautomator(); err != nil {
-			log.Printf("uiautomator quit: %v", err)
-		}
-		if time.Since(start) > 3*time.Minute {
-			retry = 5
-		}
-		time.Sleep(2 * time.Second)
-	}
-	log.Println("uiautomator can not started")
-}
-
-func runUiautomator() error {
-	c := exec.Command("am", "instrument", "-w", "-r",
-		"-e", "debug", "false",
-		"-e", "class", "com.github.uiautomator.stub.Stub",
-		"com.github.uiautomator.test/android.support.test.runner.AndroidJUnitRunner")
-	c.Stdout = os.Stdout
-	c.Stderr = os.Stderr
-	return c.Run()
 }
 
 type DownloadManager struct {
@@ -600,6 +571,7 @@ func main() {
 	fDaemon := flag.Bool("d", false, "run daemon")
 	flag.IntVar(&listenPort, "p", 7912, "listen port") // Create on 2017/09/12
 	fVersion := flag.Bool("v", false, "show version")
+	fRequirements := flag.Bool("r", false, "install minicap and uiautomator.apk")
 	fStop := flag.Bool("stop", false, "stop server")
 	fTunnelServer := flag.String("t", "", "tunnel server address")
 	flag.Parse()
@@ -621,10 +593,13 @@ func main() {
 		return
 	}
 
-	log.Println("check dependencies")
-	if err := installRequirements(); err != nil {
-		// panic(err)
-		log.Println("requirements not ready:", err)
+	if *fRequirements {
+		log.Println("check dependencies")
+		if err := installRequirements(); err != nil {
+			// panic(err)
+			log.Println("requirements not ready:", err)
+			return
+		}
 	}
 
 	if *fDaemon && os.Getenv("ATX_AGENT") == "" {
