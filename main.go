@@ -406,7 +406,20 @@ func ServeHTTP(port int) error {
 		go httpServer.Shutdown(nil)
 	})
 
+	m.HandleFunc("/uiautomator", func(w http.ResponseWriter, r *http.Request) {
+		err := safeRunUiautomator()
+		if err == nil {
+			io.WriteString(w, "Success")
+		} else {
+			io.WriteString(w, err.Error())
+		}
+	}).Methods("POST")
+
 	m.HandleFunc("/screenshot", func(w http.ResponseWriter, r *http.Request) {
+		if strings.ToLower(getProperty("ro.product.manufacturer")) == "meizu" {
+			http.Redirect(w, r, "/screenshot/0", 302)
+			return
+		}
 		imagePath := "/data/local/tmp/minicap-screenshot.jpg"
 		if err := Screenshot(imagePath); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -420,6 +433,12 @@ func ServeHTTP(port int) error {
 		if runtime.GOOS != "windows" {
 			filepath = "/" + filepath
 		}
+		var fileMode os.FileMode
+		if _, err := fmt.Sscanf(r.FormValue("mode"), "%o", &fileMode); err != nil {
+			log.Printf("invalid file mode: %s", r.FormValue("mode"))
+			fileMode = 0644
+		} // %o base 8
+
 		file, header, err := r.FormFile("file")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -443,7 +462,18 @@ func ServeHTTP(port int) error {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		fmt.Fprintf(w, "copied %d bytes into %s", written, filepath)
+		if fileMode != 0 {
+			os.Chmod(filepath, fileMode)
+		}
+		if fileInfo, err := os.Stat(filepath); err == nil {
+			fileMode = fileInfo.Mode()
+		}
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"target": filepath,
+			"size":   written,
+			"mode":   fmt.Sprintf("0%o", fileMode),
+		})
 	})
 
 	m.HandleFunc("/install", func(w http.ResponseWriter, r *http.Request) {
@@ -531,7 +561,7 @@ func ServeHTTP(port int) error {
 	http.Handle("/jsonrpc/0", uiautomatorProxy)
 	http.Handle("/ping", uiautomatorProxy)
 	http.HandleFunc("/screenshot/0", func(w http.ResponseWriter, r *http.Request) {
-		if r.FormValue("minicap") == "false" {
+		if r.FormValue("minicap") == "false" || strings.ToLower(getProperty("ro.product.manufacturer")) == "meizu" {
 			uiautomatorProxy.ServeHTTP(w, r)
 			return
 		}

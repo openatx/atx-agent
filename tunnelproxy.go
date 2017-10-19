@@ -36,9 +36,10 @@ func unsafeRunTunnelProxy(serverAddr string) error {
 
 	props, _ := androidutils.Properties()
 	devInfo := &proto.DeviceInfo{
-		Serial: props["ro.serialno"],
-		Brand:  props["ro.product.brand"],
-		Model:  props["ro.product.model"],
+		Serial:       props["ro.serialno"],
+		Brand:        props["ro.product.brand"],
+		Model:        props["ro.product.model"],
+		AgentVersion: version,
 	}
 	devInfo.HWAddr, _ = androidutils.HWAddrWLAN()
 	c.WriteJSON(proto.CommonMessage{
