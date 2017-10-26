@@ -155,7 +155,15 @@ func checkUiautomatorInstalled() (ok bool) {
 }
 
 func installAPK(path string) error {
-	out, err := runShell("pm", "install", "-d", "-r", path)
+	// -g: grant all runtime permissions
+	// -d: allow version code downgrade
+	// -r: replace existing application
+	sdk, _ := strconv.Atoi(getProperty("ro.build.version.sdk"))
+	cmds := []string{"pm", "install", "-d", "-r", path}
+	if sdk >= 23 { // android 6.0
+		cmds = []string{"pm", "install", "-d", "-r", "-g", path}
+	}
+	out, err := runShell(cmds...)
 	if err != nil {
 		matches := regexp.MustCompile(`Failure \[([\w_]+)\]`).FindStringSubmatch(string(out))
 		if len(matches) > 0 {
@@ -166,12 +174,18 @@ func installAPK(path string) error {
 	return nil
 }
 
+var canFixedInstallFails = map[string]bool{
+	"INSTALL_FAILED_PERMISSION_MODEL_DOWNGRADE": true,
+	"INSTALL_FAILED_UPDATE_INCOMPATIBLE":        true,
+}
+
 func installAPKForce(path string) error {
 	err := installAPK(path)
 	if err == nil {
 		return nil
 	}
-	if !strings.Contains(err.Error(), "INSTALL_FAILED_UPDATE_INCOMPATIBLE") {
+	errType := regexp.MustCompile(`INSTALL_FAILED_[\w_]+`).FindString(err.Error())
+	if !canFixedInstallFails[errType] {
 		return err
 	}
 	pkg, er := apk.OpenFile(path)
@@ -496,19 +510,11 @@ func ServeHTTP(port int) error {
 				return
 			}
 
-			// -g: grant all runtime permissions
-			// -d: allow version code downgrade
-			// -r: replace existing application
 			di.Message = "installing"
-			sdk, _ := strconv.Atoi(getProperty("ro.build.version.sdk"))
-			cmds := []string{"pm", "install", "-d", "-r", filepath}
-			if sdk >= 23 { // android 6.0
-				cmds = []string{"pm", "install", "-d", "-r", "-g", filepath}
-			}
-			output, err := runShell(cmds...)
+			err := installAPKForce(filepath)
 			if err != nil {
 				di.Error = err.Error()
-				di.Message = string(output)
+				di.Message = "error install"
 			} else {
 				di.Message = "success installed"
 			}

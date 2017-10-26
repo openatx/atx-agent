@@ -47,6 +47,18 @@ func unsafeRunTunnelProxy(serverAddr string) error {
 		Data: devInfo,
 	})
 
+	readQuitChan := make(chan error, 1)
+	go func() {
+		for {
+			_, data, err := c.ReadMessage()
+			if err != nil {
+				readQuitChan <- err
+				break
+			}
+			_ = data
+			// log.Printf("Websocket receive message: %v", string(data))
+		}
+	}()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
@@ -57,6 +69,8 @@ func unsafeRunTunnelProxy(serverAddr string) error {
 				log.Println(err)
 				return err
 			}
+		case err := <-readQuitChan:
+			return err
 		}
 	}
 }
