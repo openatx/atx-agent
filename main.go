@@ -670,6 +670,8 @@ func main() {
 		}
 	}
 
+	fmt.Printf("atx-agent version %s\n", version)
+
 	// show ip
 	outIp, err := getOutboundIP()
 	if err == nil {

@@ -28,11 +28,12 @@ func runTunnelProxy(serverAddr string) {
 }
 
 func unsafeRunTunnelProxy(serverAddr string) error {
-	c, _, err := websocket.DefaultDialer.Dial("ws://"+serverAddr+"/echo", nil)
+	ws, _, err := websocket.DefaultDialer.Dial("ws://"+serverAddr+"/echo", nil)
 	if err != nil {
 		return err
 	}
-	defer c.Close()
+	defer ws.Close()
+	log.Printf("server connected")
 
 	props, _ := androidutils.Properties()
 	devInfo := &proto.DeviceInfo{
@@ -42,35 +43,21 @@ func unsafeRunTunnelProxy(serverAddr string) error {
 		AgentVersion: version,
 	}
 	devInfo.HWAddr, _ = androidutils.HWAddrWLAN()
-	c.WriteJSON(proto.CommonMessage{
+	ws.WriteJSON(proto.CommonMessage{
 		Type: proto.DeviceInfoMessage,
 		Data: devInfo,
 	})
 
-	readQuitChan := make(chan error, 1)
-	go func() {
-		for {
-			_, data, err := c.ReadMessage()
-			if err != nil {
-				readQuitChan <- err
-				break
-			}
-			_ = data
-			// log.Printf("Websocket receive message: %v", string(data))
-		}
-	}()
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
+	ws.SetPingHandler(func(string) error {
+		ws.WriteMessage(websocket.PongMessage, []byte{})
+		return nil
+	})
 	for {
-		select {
-		case t := <-ticker.C:
-			err := c.WriteMessage(websocket.TextMessage, []byte(t.String()))
-			if err != nil {
-				log.Println(err)
-				return err
-			}
-		case err := <-readQuitChan:
+		_, data, err := ws.ReadMessage()
+		if err != nil {
 			return err
 		}
+		_ = data
+		// log.Printf("Websocket receive message: %v", string(data))
 	}
 }
