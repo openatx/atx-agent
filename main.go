@@ -579,8 +579,8 @@ func ServeHTTP(port int) error {
 			http.ServeFile(w, r, imagePath)
 		}
 	})
-	http.Handle("/assets/", http.FileServer(Assets))
 	http.Handle("/", m)
+	http.Handle("/assets/", http.StripPrefix("/assets", http.FileServer(Assets)))
 	httpServer = &http.Server{
 		Addr: ":" + strconv.Itoa(port),
 	}

@@ -43,6 +43,11 @@ func unsafeRunTunnelProxy(serverAddr string) error {
 		AgentVersion: version,
 	}
 	devInfo.HWAddr, _ = androidutils.HWAddrWLAN()
+
+	// Udid is ${Serial}-${MacAddress}-${model}
+	udid := props["ro.serialno"] + "-" + devInfo.HWAddr + "-" + props["ro.product.model"]
+	devInfo.Udid = udid
+
 	ws.WriteJSON(proto.CommonMessage{
 		Type: proto.DeviceInfoMessage,
 		Data: devInfo,
@@ -53,11 +58,9 @@ func unsafeRunTunnelProxy(serverAddr string) error {
 		return nil
 	})
 	for {
-		_, data, err := ws.ReadMessage()
+		_, _, err := ws.ReadMessage()
 		if err != nil {
 			return err
 		}
-		_ = data
-		// log.Printf("Websocket receive message: %v", string(data))
 	}
 }
