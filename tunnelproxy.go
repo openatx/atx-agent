@@ -2,8 +2,10 @@ package main
 
 import (
 	"log"
+	"os"
 	"time"
 
+	"github.com/franela/goreq"
 	"github.com/gorilla/websocket"
 	"github.com/openatx/androidutils"
 	"github.com/openatx/atx-server/proto"
@@ -27,7 +29,38 @@ func runTunnelProxy(serverAddr string) {
 	}
 }
 
+type VersionResponse struct {
+	ServerVersion string `json:"version"`
+	AgentVersion  string `json:"atx-agent"`
+}
+
 func unsafeRunTunnelProxy(serverAddr string) error {
+	// check version update
+	res, err := goreq.Request{Uri: "http://" + serverAddr + "/version"}.Do()
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	verResp := new(VersionResponse)
+	if err := res.Body.FromJsonTo(verResp); err != nil {
+		return err
+	}
+	if verResp.AgentVersion != version {
+		if version == "dev" {
+			log.Printf("dev version, skip version upgrade")
+		} else {
+			log.Printf("server require agent version: %v, but current %s, going to upgrade", verResp.AgentVersion, version)
+			if err := doUpdate(verResp.AgentVersion); err != nil {
+				log.Printf("upgrade error: %v", err)
+				return err
+			}
+			log.Printf("restarting server")
+			runDaemon()
+			os.Exit(0)
+		}
+	}
+
+	// keep connection with server
 	ws, _, err := websocket.DefaultDialer.Dial("ws://"+serverAddr+"/echo", nil)
 	if err != nil {
 		return err

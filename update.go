@@ -97,7 +97,12 @@ func doUpdate(version string) (err error) {
 			return err
 		}
 	}
-	filename := fmt.Sprintf("%s_%s_%s_%sv7.tar.gz", repo, version, runtime.GOOS, runtime.GOARCH)
+	arch := runtime.GOARCH
+	if runtime.GOOS == "linux" && arch == "arm" {
+		arch += "v7"
+	}
+	filename := fmt.Sprintf("%s_%s_%s_%s.tar.gz", repo, version, runtime.GOOS, arch)
+	log.Printf("update file: %s", filename)
 	checksums, err := getChecksums(version)
 	if err != nil {
 		return err
