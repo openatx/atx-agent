@@ -656,7 +656,7 @@ func main() {
 		os.Stdin = nil
 
 		log.SetOutput(f)
-		log.Println("Ignore SIGUP")
+		log.Println("Ignore SIGHUP")
 		signal.Ignore(syscall.SIGHUP)
 
 		// kill previous daemon first

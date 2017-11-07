@@ -86,10 +86,16 @@ func unsafeRunTunnelProxy(serverAddr string) error {
 		Data: devInfo,
 	})
 
+	// when network switch, connection still exists, but no ping comes
+	// server ping interval now is 10s
+	const wsReadWait = 60 * time.Second
+	ws.SetReadDeadline(time.Now().Add(wsReadWait))
 	ws.SetPingHandler(func(string) error {
+		ws.SetReadDeadline(time.Now().Add(wsReadWait))
 		ws.WriteMessage(websocket.PongMessage, []byte{})
 		return nil
 	})
+
 	for {
 		_, _, err := ws.ReadMessage()
 		if err != nil {
