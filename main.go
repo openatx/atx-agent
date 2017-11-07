@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"os/user"
 
 	"flag"
 	"fmt"
@@ -389,6 +390,20 @@ func AsyncDownloadTo(url string, filepath string, autoRelease bool) (di *Downloa
 	return
 }
 
+func currentUserName() string {
+	if u, err := user.Current(); err == nil {
+		return u.Name
+	}
+	if name := os.Getenv("USER"); name != "" {
+		return name
+	}
+	output, err := exec.Command("whoami").Output()
+	if err == nil {
+		return strings.TrimSpace(string(output))
+	}
+	return ""
+}
+
 func ServeHTTP(port int) error {
 	m := mux.NewRouter()
 
@@ -428,19 +443,6 @@ func ServeHTTP(port int) error {
 			io.WriteString(w, err.Error())
 		}
 	}).Methods("POST")
-
-	m.HandleFunc("/screenshot", func(w http.ResponseWriter, r *http.Request) {
-		if strings.ToLower(getProperty("ro.product.manufacturer")) == "meizu" {
-			http.Redirect(w, r, "/screenshot/0", 302)
-			return
-		}
-		imagePath := "/data/local/tmp/minicap-screenshot.jpg"
-		if err := Screenshot(imagePath); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		http.ServeFile(w, r, imagePath)
-	}).Methods("GET")
 
 	m.HandleFunc("/upload/{filepath:.*}", func(w http.ResponseWriter, r *http.Request) {
 		filepath := mux.Vars(r)["filepath"]
@@ -562,6 +564,15 @@ func ServeHTTP(port int) error {
 
 	m.HandleFunc("/term", handleTerminalWebsocket)
 
+	screenshotFilename := "/data/local/tmp/minicap-screenshot.jpg"
+	if username := currentUserName(); username != "" {
+		screenshotFilename = "/data/local/tmp/minicap-screenshot-" + username + ".jpg"
+	}
+
+	m.HandleFunc("/screenshot", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/screenshot/0", 302)
+	}).Methods("GET")
+
 	target, _ := url.Parse("http://127.0.0.1:9008")
 	uiautomatorProxy := httputil.NewSingleHostReverseProxy(target)
 	http.Handle("/jsonrpc/0", uiautomatorProxy)
@@ -571,12 +582,12 @@ func ServeHTTP(port int) error {
 			uiautomatorProxy.ServeHTTP(w, r)
 			return
 		}
-		imagePath := "/data/local/tmp/minicap-screenshot.jpg"
-		if err := Screenshot(imagePath); err != nil {
+		if err := Screenshot(screenshotFilename); err != nil {
 			log.Printf("screenshot[minicap] error: %v", err)
 			uiautomatorProxy.ServeHTTP(w, r)
 		} else {
-			http.ServeFile(w, r, imagePath)
+			w.Header().Set("X-Screenshot-Method", "minicap")
+			http.ServeFile(w, r, screenshotFilename)
 		}
 	})
 	http.Handle("/", m)
