@@ -63,6 +63,19 @@ $ curl $DEVICE_URL/version
 # expect example: 0.0.2
 ```
 
+## 获取设备信息
+```bash
+$ curl $DEVICE_URL/info
+{
+    "udid": "bf755cab-ff:ff:ff:ff:ff:ff-SM901",
+    "serial": "bf755cab",
+    "brand": "SMARTISAN",
+    "model": "SM901",
+    "hwaddr": "ff:ff:ff:ff:ff:ff",
+    "agentVersion": "dev"
+}
+```
+
 ## 安装应用
 ```bash
 $ curl -X POST -d url="http://some-host/some.apk" $DEVICE_URL/install

@@ -29,6 +29,21 @@ func runTunnelProxy(serverAddr string) {
 	}
 }
 
+func getDeviceInfo() *proto.DeviceInfo {
+	devInfo := &proto.DeviceInfo{
+		Serial:       getProperty("ro.serialno"),
+		Brand:        getProperty("ro.product.brand"),
+		Model:        getProperty("ro.product.model"),
+		AgentVersion: version,
+	}
+	devInfo.HWAddr, _ = androidutils.HWAddrWLAN()
+
+	// Udid is ${Serial}-${MacAddress}-${model}
+	udid := getProperty("ro.serialno") + "-" + devInfo.HWAddr + "-" + getProperty("ro.product.model")
+	devInfo.Udid = udid
+	return devInfo
+}
+
 type VersionResponse struct {
 	ServerVersion string `json:"version"`
 	AgentVersion  string `json:"atx-agent"`
@@ -68,19 +83,7 @@ func unsafeRunTunnelProxy(serverAddr string) error {
 	defer ws.Close()
 	log.Printf("server connected")
 
-	props, _ := androidutils.Properties()
-	devInfo := &proto.DeviceInfo{
-		Serial:       props["ro.serialno"],
-		Brand:        props["ro.product.brand"],
-		Model:        props["ro.product.model"],
-		AgentVersion: version,
-	}
-	devInfo.HWAddr, _ = androidutils.HWAddrWLAN()
-
-	// Udid is ${Serial}-${MacAddress}-${model}
-	udid := props["ro.serialno"] + "-" + devInfo.HWAddr + "-" + props["ro.product.model"]
-	devInfo.Udid = udid
-
+	devInfo := getDeviceInfo()
 	ws.WriteJSON(proto.CommonMessage{
 		Type: proto.DeviceInfoMessage,
 		Data: devInfo,

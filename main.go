@@ -115,17 +115,10 @@ var (
 
 func getProperty(name string) string {
 	propOnce.Do(func() {
-		properties = make(map[string]string)
-		propOutput, err := runShell("getprop")
+		var err error
+		properties, err = androidutils.Properties()
 		if err != nil {
 			panic(err)
-		}
-		re := regexp.MustCompile(`\[(.*?)\]:\s*\[(.*?)\]`)
-		matches := re.FindAllStringSubmatch(string(propOutput), -1)
-		for _, m := range matches {
-			var key = m[1]
-			var val = m[2]
-			properties[key] = val
 		}
 	})
 	return properties[name]
@@ -167,11 +160,11 @@ func installAPK(path string) error {
 	}
 	out, err := runShell(cmds...)
 	if err != nil {
-		matches := regexp.MustCompile(`Failure \[([\w_]+)\]`).FindStringSubmatch(string(out))
+		matches := regexp.MustCompile(`Failure \[([\w_ ]+)\]`).FindStringSubmatch(string(out))
 		if len(matches) > 0 {
 			return errors.Wrap(err, matches[0])
 		}
-		return err
+		return errors.Wrap(err, string(out))
 	}
 	return nil
 }
@@ -413,8 +406,22 @@ func currentUserName() string {
 	return ""
 }
 
+func renderHTML(w http.ResponseWriter, filename string) {
+	file, err := Assets.Open(filename)
+	if err != nil {
+		http.Error(w, "404 page not found", 404)
+		return
+	}
+	content, _ := ioutil.ReadAll(file)
+	template.Must(template.New(filename).Parse(string(content))).Execute(w, nil)
+}
+
 func ServeHTTP(lis net.Listener) error {
 	m := mux.NewRouter()
+
+	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		renderHTML(w, "index.html")
+	})
 
 	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		file, err := Assets.Open("index.html")
@@ -576,7 +583,19 @@ func ServeHTTP(lis net.Listener) error {
 		}()
 	})
 
-	m.HandleFunc("/term", handleTerminalWebsocket)
+	m.HandleFunc("/term", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Upgrade") == "websocket" {
+			handleTerminalWebsocket(w, r)
+			return
+		}
+		renderHTML(w, "terminal.html")
+	})
+
+	m.HandleFunc("/info", func(w http.ResponseWriter, r *http.Request) {
+		info := getDeviceInfo()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(info)
+	})
 
 	screenshotFilename := "/data/local/tmp/minicap-screenshot.jpg"
 	if username := currentUserName(); username != "" {
