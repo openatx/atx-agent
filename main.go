@@ -174,7 +174,7 @@ var canFixedInstallFails = map[string]bool{
 	"INSTALL_FAILED_UPDATE_INCOMPATIBLE":        true,
 }
 
-func installAPKForce(path string) error {
+func installAPKForce(path string, packageName string) error {
 	err := installAPK(path)
 	if err == nil {
 		return nil
@@ -183,12 +183,7 @@ func installAPKForce(path string) error {
 	if !canFixedInstallFails[errType] {
 		return err
 	}
-	pkg, er := apk.OpenFile(path)
-	if er != nil {
-		return errors.Wrap(err, er.Error())
-	}
-	defer pkg.Close()
-	runShell("pm", "uninstall", pkg.PackageName())
+	runShell("pm", "uninstall", packageName)
 	return installAPK(path)
 }
 
@@ -206,10 +201,10 @@ func installUiautomatorAPK() error {
 	if _, err := httpDownload("/data/local/tmp/app-debug-test.apk", baseURL+"/app-uiautomator-test.apk", 0644); err != nil {
 		return err
 	}
-	if err := installAPKForce("/data/local/tmp/app-debug.apk"); err != nil {
+	if err := installAPKForce("/data/local/tmp/app-debug.apk", "com.github.uiautomator"); err != nil {
 		return err
 	}
-	if err := installAPKForce("/data/local/tmp/app-debug-test.apk"); err != nil {
+	if err := installAPKForce("/data/local/tmp/app-debug-test.apk", "com.github.uiautomator.test"); err != nil {
 		return err
 	}
 	return nil
@@ -322,11 +317,12 @@ func (m *DownloadManager) DelayDel(id string, sleep time.Duration) {
 
 type DownloadProxy struct {
 	writer     io.Writer
-	Id         string `json:"id"`
-	TotalSize  int    `json:"totalSize"`
-	CopiedSize int    `json:"copiedSize"`
-	Message    string `json:"message"`
-	Error      string `json:"error,omitempty"`
+	Id         string      `json:"id"`
+	TotalSize  int         `json:"totalSize"`
+	CopiedSize int         `json:"copiedSize"`
+	Message    string      `json:"message"`
+	Error      string      `json:"error,omitempty"`
+	ExtraData  interface{} `json:"extraData,omitempty"`
 	wg         sync.WaitGroup
 }
 
@@ -532,16 +528,26 @@ func ServeHTTP(lis net.Listener) error {
 				downManager.Del(di.Id)
 				return
 			}
+			defer downManager.DelayDel(di.Id, time.Minute*5)
 
 			di.Message = "installing"
-			err := installAPKForce(filepath)
+			pkg, er := apk.OpenFile(filepath)
+			if er != nil {
+				di.Error = er.Error()
+				di.Message = "androidbinary parse apk error"
+				return
+			}
+			defer pkg.Close()
+			packageName := pkg.PackageName()
+			di.ExtraData = packageName
+			// install apk
+			err := installAPKForce(filepath, packageName)
 			if err != nil {
 				di.Error = err.Error()
 				di.Message = "error install"
 			} else {
 				di.Message = "success installed"
 			}
-			downManager.DelayDel(di.Id, time.Minute*5)
 		}()
 		io.WriteString(w, di.Id)
 	}).Methods("POST")
