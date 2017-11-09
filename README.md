@@ -78,6 +78,11 @@ $ curl -X GET $DEVICE_URL/install/1
 }
 ```
 
+## 下载文件
+```bash
+$ curl $DEVICE_URL/raw/sdcard/tmp.txt
+```
+
 ## 上传文件
 ```bash
 # 上传到/sdcard目录下 (url以/结尾)

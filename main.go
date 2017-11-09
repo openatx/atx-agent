@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os/user"
 
@@ -370,6 +371,14 @@ func AsyncDownloadTo(url string, filepath string, autoRelease bool) (di *Downloa
 	if err != nil {
 		return
 	}
+	if res.StatusCode != http.StatusOK {
+		body, err := res.Body.ToString()
+		res.Body.Close()
+		if err != nil && err != bytes.ErrTooLarge {
+			return nil, fmt.Errorf("Expected HTTP Status code: %d", res.StatusCode)
+		}
+		return nil, errors.New(body)
+	}
 	file, err := os.Create(filepath)
 	if err != nil {
 		res.Body.Close()
@@ -404,7 +413,7 @@ func currentUserName() string {
 	return ""
 }
 
-func ServeHTTP(port int) error {
+func ServeHTTP(lis net.Listener) error {
 	m := mux.NewRouter()
 
 	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -443,6 +452,11 @@ func ServeHTTP(port int) error {
 			io.WriteString(w, err.Error())
 		}
 	}).Methods("POST")
+
+	m.HandleFunc("/raw/{filepath:.*}", func(w http.ResponseWriter, r *http.Request) {
+		filepath := mux.Vars(r)["filepath"]
+		http.ServeFile(w, r, filepath)
+	})
 
 	m.HandleFunc("/upload/{filepath:.*}", func(w http.ResponseWriter, r *http.Request) {
 		filepath := mux.Vars(r)["filepath"]
@@ -592,10 +606,7 @@ func ServeHTTP(port int) error {
 	})
 	http.Handle("/", m)
 	http.Handle("/assets/", http.StripPrefix("/assets", http.FileServer(Assets)))
-	httpServer = &http.Server{
-		Addr: ":" + strconv.Itoa(port),
-	}
-	return httpServer.ListenAndServe()
+	return http.Serve(lis, nil)
 }
 
 func runDaemon() {
@@ -691,11 +702,16 @@ func main() {
 		fmt.Printf("Internet is not connected.")
 	}
 
+	listener, err := net.Listen("tcp", ":"+strconv.Itoa(listenPort))
+	if err != nil {
+		log.Fatal(err)
+	}
 	go safeRunUiautomator()
 	if *fTunnelServer != "" {
 		go runTunnelProxy(*fTunnelServer)
 	}
-	if err := ServeHTTP(listenPort); err != nil {
+	// run server forever
+	if err := ServeHTTP(listener); err != nil {
 		log.Println("server quit:", err)
 	}
 }
