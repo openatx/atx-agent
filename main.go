@@ -473,6 +473,13 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		io.WriteString(w, "Success")
 	}).Methods("POST")
 
+	m.HandleFunc("/info/rotation", func(w http.ResponseWriter, r *http.Request) {
+		var rotation int
+		json.NewDecoder(r.Body).Decode(&rotation)
+		log.Println("rotation change received:", rotation)
+		io.WriteString(w, "Success")
+	})
+
 	m.HandleFunc("/upload/{filepath:.*}", func(w http.ResponseWriter, r *http.Request) {
 		filepath := mux.Vars(r)["filepath"]
 		if runtime.GOOS != "windows" {
