@@ -172,6 +172,7 @@ func installAPK(path string) error {
 var canFixedInstallFails = map[string]bool{
 	"INSTALL_FAILED_PERMISSION_MODEL_DOWNGRADE": true,
 	"INSTALL_FAILED_UPDATE_INCOMPATIBLE":        true,
+	"INSTALL_FAILED_VERSION_DOWNGRADE":          true,
 }
 
 func installAPKForce(path string, packageName string) error {
@@ -412,7 +413,7 @@ func renderHTML(w http.ResponseWriter, filename string) {
 	template.Must(template.New(filename).Parse(string(content))).Execute(w, nil)
 }
 
-func ServeHTTP(lis net.Listener) error {
+func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 	m := mux.NewRouter()
 
 	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -460,6 +461,17 @@ func ServeHTTP(lis net.Listener) error {
 		filepath := mux.Vars(r)["filepath"]
 		http.ServeFile(w, r, filepath)
 	})
+
+	m.HandleFunc("/info/battery", func(w http.ResponseWriter, r *http.Request) {
+		devInfo := getDeviceInfo()
+		devInfo.Battery.Update()
+		if err := tunnel.UpdateInfo(devInfo); err != nil {
+			log.Printf("update info err: %v", err)
+			io.WriteString(w, "Failure "+err.Error())
+			return
+		}
+		io.WriteString(w, "Success")
+	}).Methods("POST")
 
 	m.HandleFunc("/upload/{filepath:.*}", func(w http.ResponseWriter, r *http.Request) {
 		filepath := mux.Vars(r)["filepath"]
@@ -657,6 +669,7 @@ func main() {
 	fRequirements := flag.Bool("r", false, "install minicap and uiautomator.apk")
 	fStop := flag.Bool("stop", false, "stop server")
 	fTunnelServer := flag.String("t", "", "tunnel server address")
+	fNoUiautomator := flag.Bool("nouia", false, "not start uiautomator")
 	flag.Parse()
 
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
@@ -731,12 +744,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	go safeRunUiautomator()
+	if !*fNoUiautomator {
+		go safeRunUiautomator()
+	}
+	tunnel := &TunnelProxy{ServerAddr: *fTunnelServer}
 	if *fTunnelServer != "" {
-		go runTunnelProxy(*fTunnelServer)
+		go tunnel.RunForever()
 	}
 	// run server forever
-	if err := ServeHTTP(listener); err != nil {
+	if err := ServeHTTP(listener, tunnel); err != nil {
 		log.Println("server quit:", err)
 	}
 }
