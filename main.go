@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os/user"
+	"path/filepath"
 
 	"flag"
 	"fmt"
@@ -480,10 +481,10 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		io.WriteString(w, "Success")
 	})
 
-	m.HandleFunc("/upload/{filepath:.*}", func(w http.ResponseWriter, r *http.Request) {
-		filepath := mux.Vars(r)["filepath"]
+	m.HandleFunc("/upload/{target:.*}", func(w http.ResponseWriter, r *http.Request) {
+		target := mux.Vars(r)["target"]
 		if runtime.GOOS != "windows" {
-			filepath = "/" + filepath
+			target = "/" + target
 		}
 		var fileMode os.FileMode
 		if _, err := fmt.Sscanf(r.FormValue("mode"), "%o", &fileMode); err != nil {
@@ -500,29 +501,35 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 			file.Close()
 			r.MultipartForm.RemoveAll()
 		}()
-		if strings.HasSuffix(filepath, "/") {
-			filepath = path.Join(filepath, header.Filename)
+		if strings.HasSuffix(target, "/") {
+			target = path.Join(target, header.Filename)
 		}
-		target, err := os.Create(filepath)
+
+		targetDir := filepath.Dir(target)
+		if _, err := os.Stat(targetDir); os.IsNotExist(err) {
+			os.MkdirAll(targetDir, 0755)
+		}
+
+		fd, err := os.Create(target)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		defer target.Close()
-		written, err := io.Copy(target, file)
+		defer fd.Close()
+		written, err := io.Copy(fd, file)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if fileMode != 0 {
-			os.Chmod(filepath, fileMode)
+			os.Chmod(target, fileMode)
 		}
-		if fileInfo, err := os.Stat(filepath); err == nil {
+		if fileInfo, err := os.Stat(target); err == nil {
 			fileMode = fileInfo.Mode()
 		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"target": filepath,
+			"target": target,
 			"size":   written,
 			"mode":   fmt.Sprintf("0%o", fileMode),
 		})
