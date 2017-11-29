@@ -28,6 +28,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/DeanThompson/syncmap"
 	"github.com/codeskyblue/kexec"
 	"github.com/franela/goreq"
 	"github.com/gorilla/mux"
@@ -354,6 +355,7 @@ func (d *DownloadProxy) Wait() {
 var downManager = newDownloadManager()
 
 func AsyncDownloadTo(url string, filepath string, autoRelease bool) (di *DownloadProxy, err error) {
+	// do real http download
 	res, err := goreq.Request{
 		Uri:             url,
 		MaxRedirects:    10,
@@ -535,6 +537,51 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		})
 	})
 
+	installThreads := syncmap.New()
+
+	// m.HandleFunc("/download/httpget")
+
+	// TODO: need test
+	m.HandleFunc("/install-local", func(w http.ResponseWriter, r *http.Request) {
+		filepath := r.FormValue("filepath")
+		key := fmt.Sprintf("k%d", time.Now().Nanosecond)
+		go func(key string) {
+			update := func(v map[string]string) {
+				installThreads.Set(key, v)
+			}
+			go func() {
+				time.Sleep(5 * time.Minute)
+				installThreads.Delete(key)
+			}()
+			update(map[string]string{"message": "apk parsing"})
+			pkg, er := apk.OpenFile(filepath)
+			if er != nil {
+				update(map[string]string{
+					"error":   er.Error(),
+					"message": "androidbinary parse apk error",
+				})
+				return
+			}
+			defer pkg.Close()
+			packageName := pkg.PackageName()
+			update(map[string]string{
+				"message":   "installing",
+				"extraData": packageName,
+			})
+			// install apk
+			err := installAPKForce(filepath, packageName)
+			if err != nil {
+				update(map[string]string{
+					"error":   err.Error(),
+					"message": "error install",
+				})
+			} else {
+				update(map[string]string{"message": "success installed"})
+			}
+		}(key)
+		io.WriteString(w, key)
+	})
+
 	m.HandleFunc("/install", func(w http.ResponseWriter, r *http.Request) {
 		url := r.FormValue("url")
 		filepath := r.FormValue("filepath")
@@ -556,7 +603,7 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 			}
 			defer downManager.DelayDel(di.Id, time.Minute*5)
 
-			di.Message = "installing"
+			di.Message = "apk parsing"
 			pkg, er := apk.OpenFile(filepath)
 			if er != nil {
 				di.Error = er.Error()
@@ -567,6 +614,7 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 			packageName := pkg.PackageName()
 			di.ExtraData = packageName
 			// install apk
+			di.Message = "installing"
 			err := installAPKForce(filepath, packageName)
 			if err != nil {
 				di.Error = err.Error()
