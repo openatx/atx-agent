@@ -21,7 +21,7 @@ var (
 	httpServer *http.Server
 )
 
-func dnsLookupHost(hostname string) (ip net.IP, err error) {
+func dnsLookupHost(hostname string, dnsServer string) (ip net.IP, err error) {
 	if !strings.HasSuffix(hostname, ".") {
 		hostname += "."
 	}
@@ -33,7 +33,8 @@ func dnsLookupHost(hostname string) (ip net.IP, err error) {
 	}
 	c := new(dns.Client)
 	c.SingleInflight = true
-	in, _, err := c.Exchange(m1, "8.8.8.8:53")
+
+	in, _, err := c.Exchange(m1, dnsServer+":53")
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +46,7 @@ func dnsLookupHost(hostname string) (ip net.IP, err error) {
 		return t.A, nil
 	}
 	if t, ok := in.Answer[0].(*dns.CNAME); ok {
-		return dnsLookupHost(t.Target)
+		return dnsLookupHost(t.Target, dnsServer)
 	}
 	return nil, errors.New("dns resolve failed: " + hostname)
 }
@@ -56,11 +57,16 @@ func init() {
 		KeepAlive: 30 * time.Second,
 		DualStack: true,
 	}
+	// get default dns server
+	dnsServer := getProperty("net.dns1")
+	if dnsServer == "" {
+		dnsServer = "8.8.8.8"
+	}
 	// manualy dns resolve
 	newDialContext := func(ctx context.Context, network, addr string) (net.Conn, error) {
 		host, port, _ := net.SplitHostPort(addr)
 		if net.ParseIP(host) == nil {
-			ip, err := dnsLookupHost(host)
+			ip, err := dnsLookupHost(host, dnsServer)
 			if err != nil {
 				return nil, err
 			}

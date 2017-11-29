@@ -583,11 +583,75 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		dp := downManager.Get(id)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(dp)
-	})
+	}).Methods("GET")
 
 	m.HandleFunc("/version", func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, version)
 	})
+
+	// FIXME(ssx): screenrecord is not good enough, need to change later
+	var recordCmd *exec.Cmd
+	var recordDone = make(chan bool, 1)
+	var recordLock sync.Mutex
+	var recordFolder = "/sdcard/screenrecords/"
+	var recordRunning = false
+
+	m.HandleFunc("/screenrecord", func(w http.ResponseWriter, r *http.Request) {
+		recordLock.Lock()
+		defer recordLock.Unlock()
+
+		if recordCmd != nil {
+			http.Error(w, "screenrecord not closed", 400)
+			return
+		}
+		os.RemoveAll(recordFolder)
+		os.MkdirAll(recordFolder, 0755)
+		recordCmd = exec.Command("screenrecord", recordFolder+"0.mp4")
+		if err := recordCmd.Start(); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		recordRunning = true
+		go func() {
+			for i := 1; recordCmd.Wait() == nil && i <= 20 && recordRunning; i++ { // set limit, to prevent too many videos. max 1 hour
+				recordCmd = exec.Command("screenrecord", recordFolder+strconv.Itoa(i)+".mp4")
+				if err := recordCmd.Start(); err != nil {
+					log.Println("screenrecord error:", err)
+					break
+				}
+			}
+			recordDone <- true
+		}()
+		io.WriteString(w, "screenrecord started")
+	}).Methods("POST")
+
+	m.HandleFunc("/screenrecord", func(w http.ResponseWriter, r *http.Request) {
+		recordLock.Lock()
+		defer recordLock.Unlock()
+
+		recordRunning = false
+		if recordCmd != nil {
+			if recordCmd.Process != nil {
+				recordCmd.Process.Signal(os.Interrupt)
+			}
+			select {
+			case <-recordDone:
+			case <-time.After(5 * time.Second):
+				// force kill
+				exec.Command("pkill", "screenrecord").Run()
+			}
+			recordCmd = nil
+		}
+		w.Header().Set("Content-Type", "application/json")
+		files, _ := ioutil.ReadDir(recordFolder)
+		videos := []string{}
+		for i := 0; i < len(files); i++ {
+			videos = append(videos, fmt.Sprintf(recordFolder+"%d.mp4", i))
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"videos": videos,
+		})
+	}).Methods("PUT")
 
 	m.HandleFunc("/upgrade", func(w http.ResponseWriter, r *http.Request) {
 		ver := r.FormValue("version")

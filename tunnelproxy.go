@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/franela/goreq"
@@ -28,7 +29,7 @@ func getDeviceInfo() *proto.DeviceInfo {
 		devInfo.Battery = battery
 
 		// Udid is ${Serial}-${MacAddress}-${model}
-		udid := getProperty("ro.serialno") + "-" + devInfo.HWAddr + "-" + getProperty("ro.product.model")
+		udid := getProperty("ro.serialno") + "-" + devInfo.HWAddr + "-" + strings.Replace(getProperty("ro.product.model"), " ", "_", -1)
 		devInfo.Udid = udid
 		currentDeviceInfo = devInfo
 	}
