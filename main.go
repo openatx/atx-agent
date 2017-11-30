@@ -120,7 +120,8 @@ func getProperty(name string) string {
 		var err error
 		properties, err = androidutils.Properties()
 		if err != nil {
-			panic(err)
+			log.Println("getProperty err:", err)
+			properties = make(map[string]string)
 		}
 	})
 	return properties[name]
@@ -469,7 +470,7 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		devInfo := getDeviceInfo()
 		devInfo.Battery.Update()
 		if err := tunnel.UpdateInfo(devInfo); err != nil {
-			log.Printf("update info err: %v", err)
+			// log.Printf("update info err: %v", err)
 			io.WriteString(w, "Failure "+err.Error())
 			return
 		}
