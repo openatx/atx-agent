@@ -82,19 +82,26 @@ func (t *TunnelProxy) run() (err error) {
 	}()
 	log.Printf("server connected")
 
+	// when network switch, connection still exists, but no ping comes
+	const wsReadWait = 60 * time.Second
+	const wsWriteWait = 60 * time.Second
+
 	devInfo := getDeviceInfo()
 	t.udid = devInfo.Udid
+
+	ws.SetWriteDeadline(time.Now().Add(wsWriteWait))
 	ws.WriteJSON(proto.CommonMessage{
 		Type: proto.DeviceInfoMessage,
 		Data: devInfo,
 	})
 
-	// when network switch, connection still exists, but no ping comes
 	// server ping interval now is 10s
-	const wsReadWait = 60 * time.Second
+	log.Println("set ping handler and read/write deadline")
 	ws.SetReadDeadline(time.Now().Add(wsReadWait))
 	ws.SetPingHandler(func(string) error {
 		ws.SetReadDeadline(time.Now().Add(wsReadWait))
+		// set write deadline on each write to prevent network issue
+		ws.SetWriteDeadline(time.Now().Add(wsWriteWait))
 		ws.WriteMessage(websocket.PongMessage, []byte{})
 		return nil
 	})
