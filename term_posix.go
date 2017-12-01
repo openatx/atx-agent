@@ -23,11 +23,6 @@ type windowSize struct {
 	Y    uint16
 }
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-}
-
 func lookShellPath() (string, error) {
 	shPath, err := exec.LookPath("bash")
 	if err == nil {

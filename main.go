@@ -36,6 +36,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/openatx/androidutils"
+	"github.com/openatx/atx-agent/cmdctrl"
 	"github.com/pkg/errors"
 	"github.com/shogo82148/androidbinary/apk"
 )
@@ -114,8 +115,9 @@ func fileExists(path string) bool {
 }
 
 var (
-	propOnce   sync.Once
-	properties map[string]string
+	propOnce       sync.Once
+	properties     map[string]string
+	deviceRotation int
 )
 
 func getProperty(name string) string {
@@ -356,7 +358,24 @@ func (d *DownloadProxy) Wait() {
 	d.wg.Wait()
 }
 
-var downManager = newDownloadManager()
+var (
+	service     = cmdctrl.New()
+	downManager = newDownloadManager()
+	upgrader    = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
+	}
+)
+
+func init() {
+	service.Add("minicap", cmdctrl.CommandInfo{
+		Environ: []string{"LD_LIBRARY_PATH=/data/local/tmp"},
+		Args:    []string{"/data/local/tmp/minicap", "-S", "-P", "1080x1920@1080x1920/0"},
+	})
+}
 
 func AsyncDownloadTo(url string, filepath string, autoRelease bool) (di *DownloadProxy, err error) {
 	// do real http download
@@ -443,7 +462,7 @@ func (r *errorBinaryReader) ReadInto(datas ...interface{}) error {
 }
 
 // read from @minicap and send jpeg raw data to channel
-func translateMinicap(conn net.Conn, jpgC chan []byte) error {
+func translateMinicap(conn net.Conn, jpgC chan []byte, quitC chan bool) error {
 	var pid, rw, rh, vw, vh uint32
 	var version, unused, orientation, quirkFlag uint8
 	rd := bufio.NewReader(conn)
@@ -470,6 +489,8 @@ func translateMinicap(conn net.Conn, jpgC chan []byte) error {
 		}
 		select {
 		case jpgC <- buf.Bytes(): // Maybe should use buffer instead
+		case <-quitC:
+			return nil
 		default:
 			// TODO(ssx): image should not wait or it will stuck here
 		}
@@ -538,9 +559,11 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 	}).Methods("POST")
 
 	m.HandleFunc("/info/rotation", func(w http.ResponseWriter, r *http.Request) {
-		var rotation int
-		json.NewDecoder(r.Body).Decode(&rotation)
-		log.Println("rotation change received:", rotation)
+		var direction int // 0,1,2,3
+		json.NewDecoder(r.Body).Decode(&direction)
+		deviceRotation = direction * 90
+		log.Println("rotation change received:", deviceRotation)
+		go service.UpdateArgs("minicap", "/data/local/tmp/minicap", "-S", "-P", "1920x1080@1920x1080/"+strconv.Itoa(deviceRotation))
 		io.WriteString(w, "Success")
 	})
 
@@ -698,12 +721,6 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		io.WriteString(w, version)
 	})
 
-	var upgrader = websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool {
-			return true
-		},
-	}
-
 	m.HandleFunc("/minicap", func(w http.ResponseWriter, r *http.Request) {
 		ws, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -712,31 +729,69 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		}
 		defer ws.Close()
 
-		ws.WriteMessage(websocket.TextMessage, []byte("start @minicap service"))
+		const wsWriteWait = 10 * time.Second
+		wsWrite := func(messageType int, data []byte) error {
+			ws.SetWriteDeadline(time.Now().Add(wsWriteWait))
+			return ws.WriteMessage(messageType, data)
+		}
+		wsWrite(websocket.TextMessage, []byte("start @minicap service"))
+		if err := service.Start("minicap"); err != nil && err != cmdctrl.ErrAlreadyRunning {
+			wsWrite(websocket.TextMessage, []byte("@minicap service start failed: "+err.Error()))
+			return
+		}
 		// TODO
-		ws.WriteMessage(websocket.TextMessage, []byte("dial unix:@minicap"))
+		wsWrite(websocket.TextMessage, []byte("dial unix:@minicap"))
 		log.Printf("minicap connection: %v", r.RemoteAddr)
 		jpgC := make(chan []byte, 10)
+		quitC := make(chan bool, 2)
+
 		go func() {
+			defer close(jpgC)
+			retries := 0
 			for {
-				conn, err := net.Dial("unix", "@minicap")
-				if err != nil {
-					log.Printf("dial @minicap err: %v", err)
+				if retries > 10 {
+					wsWrite(websocket.TextMessage, []byte("@minicap listen timeout, possibly minicap not installed"))
 					break
 				}
-				translateMinicap(conn, jpgC)
-				conn.Close()
+				conn, err := net.Dial("unix", "@minicap")
+				if err != nil {
+					retries++
+					log.Printf("dial @minicap err: %v, wait 1s", err)
+					select {
+					case <-quitC:
+						return
+					case <-time.After(1 * time.Second):
+					}
+					continue
+				}
+				retries = 0 // connected, reset retries
+				if er := translateMinicap(conn, jpgC, quitC); er == nil {
+					conn.Close()
+					log.Println("transfer closed")
+					break
+				} else {
+					conn.Close()
+					log.Println("minicap read error, try to read again")
+				}
 			}
-			close(jpgC)
+		}()
+		go func() {
+			for {
+				if _, _, err := ws.ReadMessage(); err != nil {
+					quitC <- true
+					break
+				}
+			}
 		}()
 		for data := range jpgC {
-			if err := ws.WriteMessage(websocket.TextMessage, []byte("data size: "+strconv.Itoa(len(data)))); err != nil {
+			if err := wsWrite(websocket.TextMessage, []byte("data size: "+strconv.Itoa(len(data)))); err != nil {
 				break
 			}
-			if err := ws.WriteMessage(websocket.BinaryMessage, data); err != nil {
+			if err := wsWrite(websocket.BinaryMessage, data); err != nil {
 				break
 			}
 		}
+		quitC <- true
 		log.Println("stream finished")
 	})
 

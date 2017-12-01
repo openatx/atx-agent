@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"log"
+	"os"
 	"os/exec"
 	"runtime"
 	"sync"
@@ -15,6 +16,10 @@ import (
 )
 
 var debug = false
+var (
+	ErrAlreadyRunning = errors.New("already running")
+	ErrAlreadyStopped = errors.New("already stopped")
+)
 
 func debugPrintf(format string, v ...interface{}) {
 	if debug {
@@ -31,6 +36,7 @@ func goFunc(f func() error) chan error {
 }
 
 type CommandInfo struct {
+	Environ         []string
 	Args            []string
 	MaxRetries      int
 	NextLaunchWait  time.Duration
@@ -157,7 +163,7 @@ func (p *processKeeper) start() error {
 	p.mu.Lock()
 	if p.keeping {
 		p.mu.Unlock()
-		return errors.New("already running")
+		return ErrAlreadyRunning
 	}
 	p.keeping = true
 	p.stopC = make(chan bool, 1)
@@ -175,10 +181,11 @@ func (p *processKeeper) start() error {
 				break
 			}
 			p.cmd = exec.Command(p.cmdInfo.Args[0], p.cmdInfo.Args[1:]...)
+			p.cmd.Env = append(os.Environ(), p.cmdInfo.Environ...)
 			p.cmd.Stdin = p.cmdInfo.Stdin
 			p.cmd.Stdout = p.cmdInfo.Stdout
 			p.cmd.Stderr = p.cmdInfo.Stderr
-			debugPrintf("start")
+			debugPrintf("start args: %v, env: %v", p.cmdInfo.Args, p.cmdInfo.Environ)
 			if err := p.cmd.Start(); err != nil {
 				goto CMD_DONE
 			}
@@ -186,7 +193,8 @@ func (p *processKeeper) start() error {
 			p.running = true
 			cmdC := goFunc(p.cmd.Wait)
 			select {
-			case <-cmdC:
+			case cmdErr := <-cmdC:
+				debugPrintf("cmd wait err: %v", cmdErr)
 				if time.Since(p.runBeganAt) > p.cmdInfo.RecoverDuration {
 					p.retries -= 2
 				}
@@ -207,6 +215,7 @@ func (p *processKeeper) start() error {
 			}
 		}
 	CMD_DONE:
+		debugPrintf("program finished")
 		p.mu.Lock()
 		p.running = false
 		p.keeping = false
@@ -215,8 +224,6 @@ func (p *processKeeper) start() error {
 	}()
 	return nil
 }
-
-var ErrAlreadyStopped = errors.New("already stopped")
 
 func (p *processKeeper) terminate(cmdC chan error) {
 	if runtime.GOOS == "windows" {
