@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"os/user"
 	"path/filepath"
@@ -32,6 +34,7 @@ import (
 	"github.com/codeskyblue/kexec"
 	"github.com/franela/goreq"
 	"github.com/gorilla/mux"
+	"github.com/gorilla/websocket"
 	"github.com/openatx/androidutils"
 	"github.com/pkg/errors"
 	"github.com/shogo82148/androidbinary/apk"
@@ -417,6 +420,63 @@ func renderHTML(w http.ResponseWriter, filename string) {
 	template.Must(template.New(filename).Parse(string(content))).Execute(w, nil)
 }
 
+var (
+	ErrJpegWrongFormat = errors.New("jpeg format error, not starts with 0xff,0xd8")
+)
+
+type errorBinaryReader struct {
+	rd  io.Reader
+	err error
+}
+
+func (r *errorBinaryReader) ReadInto(datas ...interface{}) error {
+	if r.err != nil {
+		return r.err
+	}
+	for _, data := range datas {
+		r.err = binary.Read(r.rd, binary.LittleEndian, data)
+		if r.err != nil {
+			return r.err
+		}
+	}
+	return nil
+}
+
+// read from @minicap and send jpeg raw data to channel
+func translateMinicap(conn net.Conn, jpgC chan []byte) error {
+	var pid, rw, rh, vw, vh uint32
+	var version, unused, orientation, quirkFlag uint8
+	rd := bufio.NewReader(conn)
+	binRd := errorBinaryReader{rd: rd}
+	err := binRd.ReadInto(&version, &unused, &pid, &rw, &rh, &vw, &vh, &orientation, &quirkFlag)
+	if err != nil {
+		return err
+	}
+	for {
+		var size uint32
+		if err = binRd.ReadInto(&size); err != nil {
+			break
+		}
+
+		lr := &io.LimitedReader{R: rd, N: int64(size)}
+		buf := bytes.NewBuffer(nil)
+		_, err = io.Copy(buf, lr)
+		if err != nil {
+			break
+		}
+		if string(buf.Bytes()[:2]) != "\xff\xd8" {
+			err = ErrJpegWrongFormat
+			break
+		}
+		select {
+		case jpgC <- buf.Bytes(): // Maybe should use buffer instead
+		default:
+			// TODO(ssx): image should not wait or it will stuck here
+		}
+	}
+	return err
+}
+
 func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 	m := mux.NewRouter()
 
@@ -424,15 +484,15 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		renderHTML(w, "index.html")
 	})
 
-	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		file, err := Assets.Open("index.html")
-		if err != nil {
-			http.Error(w, "404 page not found", 404)
-			return
-		}
-		content, _ := ioutil.ReadAll(file)
-		template.Must(template.New("index").Parse(string(content))).Execute(w, nil)
-	})
+	// m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	// 	file, err := Assets.Open("index.html")
+	// 	if err != nil {
+	// 		http.Error(w, "404 page not found", 404)
+	// 		return
+	// 	}
+	// 	content, _ := ioutil.ReadAll(file)
+	// 	template.Must(template.New("index").Parse(string(content))).Execute(w, nil)
+	// })
 
 	m.HandleFunc("/shell", func(w http.ResponseWriter, r *http.Request) {
 		command := r.FormValue("command")
@@ -545,7 +605,7 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 	// TODO: need test
 	m.HandleFunc("/install-local", func(w http.ResponseWriter, r *http.Request) {
 		filepath := r.FormValue("filepath")
-		key := fmt.Sprintf("k%d", time.Now().Nanosecond)
+		key := fmt.Sprintf("k%d", time.Now().Nanosecond())
 		go func(key string) {
 			update := func(v map[string]string) {
 				installThreads.Set(key, v)
@@ -636,6 +696,48 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 
 	m.HandleFunc("/version", func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, version)
+	})
+
+	var upgrader = websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
+	}
+
+	m.HandleFunc("/minicap", func(w http.ResponseWriter, r *http.Request) {
+		ws, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			log.Print("upgrade:", err)
+			return
+		}
+		defer ws.Close()
+
+		ws.WriteMessage(websocket.TextMessage, []byte("start @minicap service"))
+		// TODO
+		ws.WriteMessage(websocket.TextMessage, []byte("dial unix:@minicap"))
+		log.Printf("minicap connection: %v", r.RemoteAddr)
+		jpgC := make(chan []byte, 10)
+		go func() {
+			for {
+				conn, err := net.Dial("unix", "@minicap")
+				if err != nil {
+					log.Printf("dial @minicap err: %v", err)
+					break
+				}
+				translateMinicap(conn, jpgC)
+				conn.Close()
+			}
+			close(jpgC)
+		}()
+		for data := range jpgC {
+			if err := ws.WriteMessage(websocket.TextMessage, []byte("data size: "+strconv.Itoa(len(data)))); err != nil {
+				break
+			}
+			if err := ws.WriteMessage(websocket.BinaryMessage, data); err != nil {
+				break
+			}
+		}
+		log.Println("stream finished")
 	})
 
 	// FIXME(ssx): screenrecord is not good enough, need to change later

@@ -132,7 +132,10 @@ func (cc *CommandCtrl) UpdateArgs(name string, args ...string) error {
 		return errors.New("cmdctl not found: " + name)
 	}
 	pkeeper.cmdInfo.Args = args
-	log.Println(pkeeper.cmdInfo.Args)
+	debugPrintf("cmd args: %v", pkeeper.cmdInfo.Args)
+	if !pkeeper.keeping {
+		return nil
+	}
 	return cc.Restart(name)
 }
 

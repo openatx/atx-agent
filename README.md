@@ -120,6 +120,31 @@ $ curl 10.0.0.1:7912/upgrade
 $ curl "10.0.0.1:7912/upgrade?version=0.0.2"
 ```
 
+## 视频录制
+开始录制
+
+```bash
+$ curl -X POST 10.0.0.1:7912/screenrecord
+```
+
+停止录制并获取录制结果
+
+```bash
+$ curl -X PUT 10.0.0.1:7912/screenrecord
+{
+    "videos": [
+        "/sdcard/screenrecords/0.mp4",
+        "/sdcard/screenrecords/1.mp4"
+    ]
+}
+```
+
+之后再下载到本地
+
+```bash
+$ curl -X GET 10.0.0.1:7912/raw/sdcard/screenrecords/0.mp4
+```
+
 # TODO
 1. 目前安全性还是个问题，以后再想办法改善
 2. 补全接口文档
