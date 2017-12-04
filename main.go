@@ -1028,6 +1028,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	// []string{"am", "start", "-W", "-n", "com.github.uiautomator/.MainActivity"}
 	if !*fNoUiautomator {
 		go safeRunUiautomator()
 	}
