@@ -15,8 +15,9 @@ import (
 	"time"
 )
 
-var debug = false
 var (
+	debug = true
+
 	ErrAlreadyRunning = errors.New("already running")
 	ErrAlreadyStopped = errors.New("already stopped")
 )
@@ -38,13 +39,13 @@ func goFunc(f func() error) chan error {
 type CommandInfo struct {
 	Environ         []string
 	Args            []string
-	MaxRetries      int
-	NextLaunchWait  time.Duration
-	RecoverDuration time.Duration
+	MaxRetries      int           // 3
+	NextLaunchWait  time.Duration // 0.5s
+	RecoverDuration time.Duration // 30s
 
-	Stderr io.Writer
-	Stdout io.Writer
-	Stdin  io.Reader
+	Stderr io.Writer // nil
+	Stdout io.Writer // nil
+	Stdin  io.Reader // nil
 }
 
 type CommandCtrl struct {
@@ -189,6 +190,7 @@ func (p *processKeeper) start() error {
 			if err := p.cmd.Start(); err != nil {
 				goto CMD_DONE
 			}
+			debugPrintf("program pid: %d", p.cmd.Process.Pid)
 			p.runBeganAt = time.Now()
 			p.running = true
 			cmdC := goFunc(p.cmd.Wait)
@@ -225,6 +227,7 @@ func (p *processKeeper) start() error {
 	return nil
 }
 
+// TODO: support kill by env, like jenkins
 func (p *processKeeper) terminate(cmdC chan error) {
 	if runtime.GOOS == "windows" {
 		if p.cmd.Process != nil {

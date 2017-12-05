@@ -371,9 +371,12 @@ var (
 )
 
 func init() {
+	devInfo := getDeviceInfo()
+	width, height := devInfo.Display.Width, devInfo.Display.Height
+	log.Println(fmt.Sprintf("%dx%d@800x800/0", width, height))
 	service.Add("minicap", cmdctrl.CommandInfo{
 		Environ: []string{"LD_LIBRARY_PATH=/data/local/tmp"},
-		Args:    []string{"/data/local/tmp/minicap", "-S", "-P", "1080x1920@1080x1920/0"},
+		Args:    []string{"/data/local/tmp/minicap", "-S", "-P", fmt.Sprintf("%dx%d@800x800/0", width, height)},
 	})
 }
 
@@ -505,15 +508,9 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		renderHTML(w, "index.html")
 	})
 
-	// m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-	// 	file, err := Assets.Open("index.html")
-	// 	if err != nil {
-	// 		http.Error(w, "404 page not found", 404)
-	// 		return
-	// 	}
-	// 	content, _ := ioutil.ReadAll(file)
-	// 	template.Must(template.New("index").Parse(string(content))).Execute(w, nil)
-	// })
+	m.HandleFunc("/remote", func(w http.ResponseWriter, r *http.Request) {
+		renderHTML(w, "remote.html")
+	})
 
 	m.HandleFunc("/shell", func(w http.ResponseWriter, r *http.Request) {
 		command := r.FormValue("command")
@@ -534,7 +531,8 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 	})
 
 	m.HandleFunc("/uiautomator", func(w http.ResponseWriter, r *http.Request) {
-		err := safeRunUiautomator()
+		// err := safeRunUiautomator()
+		err := service.Start("uiautomator")
 		if err == nil {
 			io.WriteString(w, "Success")
 		} else {
@@ -563,7 +561,9 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		json.NewDecoder(r.Body).Decode(&direction)
 		deviceRotation = direction * 90
 		log.Println("rotation change received:", deviceRotation)
-		go service.UpdateArgs("minicap", "/data/local/tmp/minicap", "-S", "-P", "1920x1080@1920x1080/"+strconv.Itoa(deviceRotation))
+		devInfo := getDeviceInfo()
+		width, height := devInfo.Display.Width, devInfo.Display.Height
+		go service.UpdateArgs("minicap", "/data/local/tmp/minicap", "-S", "-P", fmt.Sprintf("%dx%d@800x800/%d", width, height, deviceRotation))
 		io.WriteString(w, "Success")
 	})
 
@@ -756,11 +756,11 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 				conn, err := net.Dial("unix", "@minicap")
 				if err != nil {
 					retries++
-					log.Printf("dial @minicap err: %v, wait 1s", err)
+					log.Printf("dial @minicap err: %v, wait 0.5s", err)
 					select {
 					case <-quitC:
 						return
-					case <-time.After(1 * time.Second):
+					case <-time.After(500 * time.Millisecond):
 					}
 					continue
 				}
@@ -1028,9 +1028,23 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// []string{"am", "start", "-W", "-n", "com.github.uiautomator/.MainActivity"}
 	if !*fNoUiautomator {
-		go safeRunUiautomator()
+		if _, err := runShell("am", "start", "-W", "-n", "com.github.uiautomator/.MainActivity"); err != nil {
+			log.Println("start uiautomator err:", err)
+		}
+		service.Add("uiautomator", cmdctrl.CommandInfo{
+			Args: []string{"am", "instrument", "-w", "-r",
+				"-e", "debug", "false",
+				"-e", "class", "com.github.uiautomator.stub.Stub",
+				"com.github.uiautomator.test/android.support.test.runner.AndroidJUnitRunner"},
+			Stdout:          os.Stdout,
+			Stderr:          os.Stderr,
+			MaxRetries:      3,
+			RecoverDuration: 30 * time.Second,
+		})
+		if err := service.Start("uiautomator"); err != nil {
+			log.Println("uiautomator start failed:", err)
+		}
 	}
 	tunnel := &TunnelProxy{ServerAddr: *fTunnelServer}
 	if *fTunnelServer != "" {

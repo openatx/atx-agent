@@ -24,6 +24,7 @@ func getDeviceInfo() *proto.DeviceInfo {
 			AgentVersion: version,
 		}
 		devInfo.HWAddr, _ = androidutils.HWAddrWLAN()
+		devInfo.Display, _ = androidutils.WindowSize()
 		battery := androidutils.Battery{}
 		battery.Update()
 		devInfo.Battery = battery
