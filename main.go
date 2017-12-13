@@ -501,6 +501,12 @@ func translateMinicap(conn net.Conn, jpgC chan []byte, quitC chan bool) error {
 	return err
 }
 
+// var workers = syncmap.New()
+
+// goInstallApk := func(filepath string) (key string){
+
+// 		}
+
 func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 	m := mux.NewRouter()
 
@@ -523,7 +529,7 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 			"output": string(output),
 			"error":  err,
 		})
-	})
+	}).Methods("GET", "POST")
 
 	m.HandleFunc("/stop", func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, "Finished!")
