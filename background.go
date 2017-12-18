@@ -4,11 +4,17 @@ Handle offline download and apk install
 package main
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/DeanThompson/syncmap"
+	"github.com/franela/goreq"
 )
 
 type BackgroundStatus struct {
@@ -52,11 +58,44 @@ func (b *Background) delayDelete(key string) {
 
 func (b *Background) HTTPDownload(urlStr string, dst string) (key string) {
 	key = b.genKey()
-	go b.doHTTPDownload(urlStr, dst, key)
+	go func() {
+		defer b.delayDelete(key)
+		b.Get(key).Message = "downloading"
+		if err := b.doHTTPDownload(urlStr, dst, key); err != nil {
+			b.Get(key).Message = "error: " + err.Error()
+		} else {
+			b.Get(key).Message = "downloaded"
+		}
+	}()
 	return
 }
 
-func (b *Background) doHTTPDownload(urlStr string, dst string, key string) {
+func (b *Background) doHTTPDownload(urlStr string, dst string, key string) (err error) {
+
 	// TODO
-	defer b.delayDelete(key)
+	res, err := goreq.Request{
+		Uri:             urlStr,
+		MaxRedirects:    10,
+		RedirectHeaders: true,
+	}.Do()
+	if err != nil {
+		return
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		body, err := res.Body.ToString()
+		res.Body.Close()
+		if err != nil && err == bytes.ErrTooLarge {
+			return fmt.Errorf("Expected HTTP Status code: %d", res.StatusCode)
+		}
+		return errors.New(body)
+	}
+	file, err := os.Create(dst)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+	// progress
+	_, err = io.Copy(file, res.Body)
+	return
 }
