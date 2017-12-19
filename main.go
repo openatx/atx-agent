@@ -335,9 +335,10 @@ type DownloadProxy struct {
 	wg         sync.WaitGroup
 }
 
-func newDownloadProxy(wr io.Writer) *DownloadProxy {
+func newDownloadProxy(wr io.Writer, totalSize int) *DownloadProxy {
 	di := &DownloadProxy{
-		writer: wr,
+		writer:    wr,
+		TotalSize: totalSize,
 	}
 	di.wg.Add(1)
 	return di
@@ -403,8 +404,9 @@ func AsyncDownloadTo(url string, filepath string, autoRelease bool) (di *Downloa
 		res.Body.Close()
 		return
 	}
-	di = newDownloadProxy(file)
-	fmt.Sscanf(res.Header.Get("Content-Length"), "%d", &di.TotalSize)
+	var totalSize int
+	fmt.Sscanf(res.Header.Get("Content-Length"), "%d", &totalSize)
+	di = newDownloadProxy(file, totalSize)
 	downloadKey := downManager.Put(di)
 	go func() {
 		if autoRelease {
@@ -629,7 +631,24 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 
 	installThreads := syncmap.New()
 
-	// m.HandleFunc("/download/httpget")
+	m.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
+		dst := r.FormValue("filepath")
+		url := r.FormValue("url")
+		var fileMode os.FileMode
+		if _, err := fmt.Sscanf(r.FormValue("mode"), "%o", &fileMode); err != nil {
+			log.Printf("invalid file mode: %s", r.FormValue("mode"))
+			fileMode = 0644
+		} // %o base 8
+		key := background.HTTPDownload(url, dst, fileMode)
+		io.WriteString(w, key)
+	}).Methods("POST")
+
+	m.HandleFunc("/download/{key}", func(w http.ResponseWriter, r *http.Request) {
+		key := mux.Vars(r)["key"]
+		status := background.Get(key)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(status)
+	}).Methods("GET")
 
 	// TODO: need test
 	m.HandleFunc("/install-local", func(w http.ResponseWriter, r *http.Request) {

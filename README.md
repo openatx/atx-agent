@@ -105,6 +105,22 @@ $ curl -F "file=@somefile.txt" $DEVICE_URL/upload/sdcard/
 $ curl -F "file=@somefile.txt" $DEVICE_URL/upload/sdcard/tmp.txt
 ```
 
+## 离线下载
+```bash
+# 离线下载，返回ID
+$ curl -F url=https://.... -F filepath=/sdcard/some.txt -F mode=0644 $DEVICE_URL/download
+1
+# 通过返回的ID查看下载状态
+$ curl $DEVICE_URL/download/1
+{
+    "message": "downloading",
+    "progress": {
+        "totalSize": 15000,
+        "copiedSize": 10000
+    }
+}
+```
+
 ## 程序自升级
 升级程序从gihub releases里面直接下载，升级完后自动重启
 
