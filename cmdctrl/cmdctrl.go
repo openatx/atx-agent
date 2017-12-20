@@ -112,6 +112,12 @@ func (cc *CommandCtrl) Stop(name string) error {
 	return pkeeper.stop(false)
 }
 
+func (cc *CommandCtrl) StopAll() {
+	for _, pkeeper := range cc.cmds {
+		pkeeper.stop(true)
+	}
+}
+
 func (cc *CommandCtrl) Restart(name string) error {
 	cc.rl.RLock()
 	pkeeper, ok := cc.cmds[name]

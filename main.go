@@ -534,6 +534,9 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 	}).Methods("GET", "POST")
 
 	m.HandleFunc("/stop", func(w http.ResponseWriter, r *http.Request) {
+		log.Println("stop all service")
+		service.StopAll()
+		log.Println("server stopped")
 		io.WriteString(w, "Finished!")
 		go httpServer.Shutdown(nil)
 	})

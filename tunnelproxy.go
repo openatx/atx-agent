@@ -24,10 +24,11 @@ func getDeviceInfo() *proto.DeviceInfo {
 			AgentVersion: version,
 		}
 		devInfo.HWAddr, _ = androidutils.HWAddrWLAN()
-		devInfo.Display, _ = androidutils.WindowSize()
+		display, _ := androidutils.WindowSize()
+		devInfo.Display = &display
 		battery := androidutils.Battery{}
 		battery.Update()
-		devInfo.Battery = battery
+		devInfo.Battery = &battery
 
 		// Udid is ${Serial}-${MacAddress}-${model}
 		udid := getProperty("ro.serialno") + "-" + devInfo.HWAddr + "-" + strings.Replace(getProperty("ro.product.model"), " ", "_", -1)
