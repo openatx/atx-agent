@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/json"
 	"os/user"
@@ -537,9 +538,13 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 	m.HandleFunc("/stop", func(w http.ResponseWriter, r *http.Request) {
 		log.Println("stop all service")
 		service.StopAll()
-		log.Println("server stopped")
+		log.Println("service stopped")
 		io.WriteString(w, "Finished!")
-		go httpServer.Shutdown(nil)
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel() // The document says need to call cancel(), but I donot known why.
+			httpServer.Shutdown(ctx)
+		}()
 	})
 
 	m.HandleFunc("/uiautomator", func(w http.ResponseWriter, r *http.Request) {
@@ -947,9 +952,9 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 
 	target, _ := url.Parse("http://127.0.0.1:9008")
 	uiautomatorProxy := httputil.NewSingleHostReverseProxy(target)
-	http.Handle("/jsonrpc/0", uiautomatorProxy)
-	http.Handle("/ping", uiautomatorProxy)
-	http.HandleFunc("/screenshot/0", func(w http.ResponseWriter, r *http.Request) {
+	m.Handle("/jsonrpc/0", uiautomatorProxy)
+	m.Handle("/ping", uiautomatorProxy)
+	m.HandleFunc("/screenshot/0", func(w http.ResponseWriter, r *http.Request) {
 		if r.FormValue("minicap") == "false" || strings.ToLower(getProperty("ro.product.manufacturer")) == "meizu" {
 			uiautomatorProxy.ServeHTTP(w, r)
 			return
@@ -962,9 +967,11 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 			http.ServeFile(w, r, screenshotFilename)
 		}
 	})
-	http.Handle("/", m)
-	http.Handle("/assets/", http.StripPrefix("/assets", http.FileServer(Assets)))
-	return http.Serve(lis, nil)
+
+	m.Handle("/assets/{(.*)}", http.StripPrefix("/assets", http.FileServer(Assets)))
+
+	httpServer = &http.Server{Handler: m} // url(/stop) need it.
+	return httpServer.Serve(lis)
 }
 
 func runDaemon() {
