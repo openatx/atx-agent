@@ -41,6 +41,29 @@ import (
 	"github.com/shogo82148/androidbinary/apk"
 )
 
+var (
+	service     = cmdctrl.New()
+	downManager = newDownloadManager()
+	upgrader    = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
+	}
+)
+
+func init() {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+
+	devInfo := getDeviceInfo()
+	width, height := devInfo.Display.Width, devInfo.Display.Height
+	service.Add("minicap", cmdctrl.CommandInfo{
+		Environ: []string{"LD_LIBRARY_PATH=/data/local/tmp"},
+		Args:    []string{"/data/local/tmp/minicap", "-S", "-P", fmt.Sprintf("%dx%d@800x800/0", width, height)},
+	})
+}
+
 // Get preferred outbound ip of this machine
 func getOutboundIP() (ip net.IP, err error) {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
@@ -359,28 +382,6 @@ func (d *DownloadProxy) Wait() {
 	d.wg.Wait()
 }
 
-var (
-	service     = cmdctrl.New()
-	downManager = newDownloadManager()
-	upgrader    = websocket.Upgrader{
-		ReadBufferSize:  1024,
-		WriteBufferSize: 1024,
-		CheckOrigin: func(r *http.Request) bool {
-			return true
-		},
-	}
-)
-
-func init() {
-	devInfo := getDeviceInfo()
-	width, height := devInfo.Display.Width, devInfo.Display.Height
-	log.Println(fmt.Sprintf("%dx%d@800x800/0", width, height))
-	service.Add("minicap", cmdctrl.CommandInfo{
-		Environ: []string{"LD_LIBRARY_PATH=/data/local/tmp"},
-		Args:    []string{"/data/local/tmp/minicap", "-S", "-P", fmt.Sprintf("%dx%d@800x800/0", width, height)},
-	})
-}
-
 func AsyncDownloadTo(url string, filepath string, autoRelease bool) (di *DownloadProxy, err error) {
 	// do real http download
 	res, err := goreq.Request{
@@ -542,14 +543,22 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 	})
 
 	m.HandleFunc("/uiautomator", func(w http.ResponseWriter, r *http.Request) {
-		// err := safeRunUiautomator()
 		err := service.Start("uiautomator")
 		if err == nil {
 			io.WriteString(w, "Success")
 		} else {
-			io.WriteString(w, err.Error())
+			http.Error(w, err.Error(), 500)
 		}
 	}).Methods("POST")
+
+	m.HandleFunc("/uiautomator", func(w http.ResponseWriter, r *http.Request) {
+		err := service.Stop("uiautomator")
+		if err == nil {
+			io.WriteString(w, "Success")
+		} else {
+			http.Error(w, err.Error(), 500)
+		}
+	}).Methods("DELETE")
 
 	m.HandleFunc("/raw/{filepath:.*}", func(w http.ResponseWriter, r *http.Request) {
 		filepath := mux.Vars(r)["filepath"]
@@ -984,8 +993,6 @@ func main() {
 	fNoUiautomator := flag.Bool("nouia", false, "not start uiautomator")
 	flag.Parse()
 
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-
 	if *fVersion {
 		fmt.Println(version)
 		return
@@ -1056,24 +1063,27 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// uiautomator
+	service.Add("uiautomator", cmdctrl.CommandInfo{
+		Args: []string{"am", "instrument", "-w", "-r",
+			"-e", "debug", "false",
+			"-e", "class", "com.github.uiautomator.stub.Stub",
+			"com.github.uiautomator.test/android.support.test.runner.AndroidJUnitRunner"},
+		Stdout:          os.Stdout,
+		Stderr:          os.Stderr,
+		MaxRetries:      3,
+		RecoverDuration: 30 * time.Second,
+	})
 	if !*fNoUiautomator {
 		if _, err := runShell("am", "start", "-W", "-n", "com.github.uiautomator/.MainActivity"); err != nil {
 			log.Println("start uiautomator err:", err)
 		}
-		service.Add("uiautomator", cmdctrl.CommandInfo{
-			Args: []string{"am", "instrument", "-w", "-r",
-				"-e", "debug", "false",
-				"-e", "class", "com.github.uiautomator.stub.Stub",
-				"com.github.uiautomator.test/android.support.test.runner.AndroidJUnitRunner"},
-			Stdout:          os.Stdout,
-			Stderr:          os.Stderr,
-			MaxRetries:      3,
-			RecoverDuration: 30 * time.Second,
-		})
 		if err := service.Start("uiautomator"); err != nil {
 			log.Println("uiautomator start failed:", err)
 		}
 	}
+
 	tunnel := &TunnelProxy{ServerAddr: *fTunnelServer}
 	if *fTunnelServer != "" {
 		go tunnel.RunForever()

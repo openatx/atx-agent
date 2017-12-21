@@ -121,6 +121,17 @@ $ curl $DEVICE_URL/download/1
 }
 ```
 
+## uiautomator起停
+```
+# 启动
+$ curl -X POST $DEVICE_URL/uiautomator
+Success
+
+# 停止
+$ curl -X DELETE $DEVICE_URL/uiautomator
+Success
+```
+
 ## 程序自升级
 升级程序从gihub releases里面直接下载，升级完后自动重启
 
