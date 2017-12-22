@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,14 +22,35 @@ func getDeviceInfo() *proto.DeviceInfo {
 			Serial:       getProperty("ro.serialno"),
 			Brand:        getProperty("ro.product.brand"),
 			Model:        getProperty("ro.product.model"),
+			Version:      getProperty("ro.build.version.release"),
 			AgentVersion: version,
 		}
+		devInfo.Sdk, _ = strconv.Atoi(getProperty("ro.build.version.sdk"))
 		devInfo.HWAddr, _ = androidutils.HWAddrWLAN()
 		display, _ := androidutils.WindowSize()
 		devInfo.Display = &display
 		battery := androidutils.Battery{}
 		battery.Update()
 		devInfo.Battery = &battery
+
+		memory, err := androidutils.MemoryInfo()
+		if err != nil {
+			log.Println("get memory error:", err)
+		} else {
+			devInfo.Memory = &proto.MemoryInfo{
+				Total: memory["MemTotal"],
+			}
+		}
+
+		hardware, processors, err := androidutils.ProcessorInfo()
+		if err != nil {
+			log.Println("get cpuinfo error:", err)
+		} else {
+			devInfo.Cpu = &proto.CpuInfo{
+				Hardware: hardware,
+				Cores:    len(processors),
+			}
+		}
 
 		// Udid is ${Serial}-${MacAddress}-${model}
 		udid := getProperty("ro.serialno") + "-" + devInfo.HWAddr + "-" + strings.Replace(getProperty("ro.product.model"), " ", "_", -1)
