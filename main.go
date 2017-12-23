@@ -6,9 +6,6 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/json"
-	"os/user"
-	"path/filepath"
-
 	"flag"
 	"fmt"
 	"html/template"
@@ -22,7 +19,9 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"os/user"
 	"path"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strconv"
@@ -62,6 +61,9 @@ func init() {
 	service.Add("minicap", cmdctrl.CommandInfo{
 		Environ: []string{"LD_LIBRARY_PATH=/data/local/tmp"},
 		Args:    []string{"/data/local/tmp/minicap", "-S", "-P", fmt.Sprintf("%dx%d@800x800/0", width, height)},
+	})
+	service.Add("minitouch", cmdctrl.CommandInfo{
+		Args: []string{"/data/local/tmp/minitouch"},
 	})
 }
 
@@ -763,6 +765,74 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		io.WriteString(w, version)
 	})
 
+	m.HandleFunc("/minitouch", func(w http.ResponseWriter, r *http.Request) {
+		ws, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			log.Print("upgrade:", err)
+			return
+		}
+		defer ws.Close()
+		const wsWriteWait = 10 * time.Second
+		wsWrite := func(messageType int, data []byte) error {
+			ws.SetWriteDeadline(time.Now().Add(wsWriteWait))
+			return ws.WriteMessage(messageType, data)
+		}
+		wsWrite(websocket.TextMessage, []byte("start @minitouch service"))
+		if err := service.Start("minitouch"); err != nil && err != cmdctrl.ErrAlreadyRunning {
+			wsWrite(websocket.TextMessage, []byte("@minitouch service start failed: "+err.Error()))
+			return
+		}
+		wsWrite(websocket.TextMessage, []byte("dial unix:@minitouch"))
+		log.Printf("minitouch connection: %v", r.RemoteAddr)
+		retries := 0
+		quitC := make(chan bool, 2)
+		operC := make(chan TouchRequest, 10)
+		defer func() {
+			wsWrite(websocket.TextMessage, []byte("unix:@minitouch websocket closed"))
+			close(operC)
+		}()
+		go func() {
+			for {
+				if retries > 10 {
+					log.Println("unix @minitouch connect failed")
+					wsWrite(websocket.TextMessage, []byte("@minitouch listen timeout, possibly minitouch not installed"))
+					break
+				}
+				conn, err := net.Dial("unix", "@minitouch")
+				if err != nil {
+					retries++
+					log.Printf("dial @minitouch error: %v, wait 0.5s", err)
+					select {
+					case <-quitC:
+						return
+					case <-time.After(500 * time.Millisecond):
+					}
+					continue
+				}
+				log.Println("unix @minitouch connected, accepting requests")
+				retries = 0 // connected, reset retries
+				if err := drainTouchRequests(conn, operC); err != nil {
+					log.Println("drain touch requests err:", err)
+				}
+				conn.Close()
+			}
+		}()
+		var touchRequest TouchRequest
+		for {
+			err := ws.ReadJSON(&touchRequest)
+			if err != nil {
+				log.Println("readJson err:", err)
+				quitC <- true
+			}
+			select {
+			case operC <- touchRequest:
+			case <-time.After(2 * time.Second):
+				wsWrite(websocket.TextMessage, []byte("touch request buffer full"))
+			}
+			log.Printf("recieve: %v", touchRequest)
+		}
+	})
+
 	m.HandleFunc("/minicap", func(w http.ResponseWriter, r *http.Request) {
 		ws, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -792,6 +862,7 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 			retries := 0
 			for {
 				if retries > 10 {
+					log.Println("unix @minicap connect failed")
 					wsWrite(websocket.TextMessage, []byte("@minicap listen timeout, possibly minicap not installed"))
 					break
 				}

@@ -172,6 +172,52 @@ $ curl -X PUT 10.0.0.1:7912/screenrecord
 $ curl -X GET 10.0.0.1:7912/raw/sdcard/screenrecords/0.mp4
 ```
 
+## Minitouch操作方法
+感谢 [openstf/minitouch](https://github.com/openstf/minitouch)
+
+Websocket连接 `$DEVICE_URL/minitouch`, 一行行的按照JSON的格式写入
+
+>注: 坐标原点始终是手机正放时候的左上角，使用者需要自己处理旋转的变化
+
+请先详细阅读minitouch的[Usage](https://github.com/openstf/minitouch#usage)文档，再来看下面的部分
+
+- Touch Down
+
+    坐标(X: 50%, Y: 50%), index代表第几个手指, `pressure`是可选的。
+
+    ```json
+    {"operation": "d", "index": 0, "pX": 0.5, "pY": 0.5, "pressure": 50}
+    ```
+
+- Touch Commit
+
+    ```json
+    {"operation": "c"}
+    ```
+
+- Touch Move
+
+    ```json
+    {"operation": "m", "index": 0, "pX": 0.5, "pY": 0.5, "pressure": 50}
+    ```
+
+- Touch Up
+
+    ```json
+    {"operation": "u", "index": 0}
+    ```
+
+- 点击x:20%, y:20,滑动到x:40%, y:50%
+
+    ```json
+    {"operation": "d", "index": 0, "pX": 0.20, "pY": 0.20, "pressure": 50}
+    {"operation": "c"}
+    {"operation": "m", "index": 0, "pX": 0.40, "pY": 0.50, "pressure": 50}
+    {"operation": "c"}
+    {"operation": "u", "index": 0}
+    {"operation": "c"}
+    ```
+
 # TODO
 1. 目前安全性还是个问题，以后再想办法改善
 2. 补全接口文档
