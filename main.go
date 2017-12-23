@@ -796,6 +796,7 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 				if retries > 10 {
 					log.Println("unix @minitouch connect failed")
 					wsWrite(websocket.TextMessage, []byte("@minitouch listen timeout, possibly minitouch not installed"))
+					ws.Close()
 					break
 				}
 				conn, err := net.Dial("unix", "@minitouch")
