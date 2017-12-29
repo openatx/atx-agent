@@ -17,11 +17,12 @@ type toucher struct {
 }
 
 type TouchRequest struct {
-	Operation string  `json:"operation"` // d, m, u
-	Index     int     `json:"index"`
-	PercentX  float64 `json:"pX"`
-	PercentY  float64 `json:"pY"`
-	Pressure  int     `json:"pressure"`
+	Operation    string  `json:"operation"` // d, m, u
+	Index        int     `json:"index"`
+	PercentX     float64 `json:"xP"`
+	PercentY     float64 `json:"yP"`
+	Milliseconds int     `json:"milliseconds"`
+	Pressure     float64 `json:"pressure"`
 }
 
 // coord(0, 0) is always left-top conner, no matter the rotation changes
@@ -54,10 +55,11 @@ func drainTouchRequests(conn net.Conn, reqC chan TouchRequest) error {
 		case "m":
 			posX = int(req.PercentX * float64(maxX))
 			posY = int(req.PercentY * float64(maxY))
-			if req.Pressure == 0 {
-				req.Pressure = 50
+			pressure := int(req.Pressure * float64(maxPressure))
+			if pressure == 0 {
+				pressure = maxPressure - 1
 			}
-			line := fmt.Sprintf("%s %d %d %d %d\n", req.Operation, req.Index, posX, posY, req.Pressure)
+			line := fmt.Sprintf("%s %d %d %d %d\n", req.Operation, req.Index, posX, posY, pressure)
 			log.WithFields(log.Fields{
 				"touch":      req,
 				"remoteAddr": conn.RemoteAddr(),
@@ -67,6 +69,8 @@ func drainTouchRequests(conn net.Conn, reqC chan TouchRequest) error {
 			_, err = conn.Write([]byte(fmt.Sprintf("u %d\n", req.Index)))
 		case "c":
 			_, err = conn.Write([]byte("c\n"))
+		case "w":
+			_, err = conn.Write([]byte(fmt.Sprintf("w %d\n", req.Milliseconds)))
 		default:
 			err = errors.New("unsupported operation: " + req.Operation)
 		}

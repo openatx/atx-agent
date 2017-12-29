@@ -38,6 +38,7 @@ import (
 	"github.com/openatx/androidutils"
 	"github.com/openatx/atx-agent/cmdctrl"
 	"github.com/pkg/errors"
+	"github.com/rs/cors"
 	"github.com/shogo82148/androidbinary/apk"
 )
 
@@ -60,7 +61,8 @@ func init() {
 	width, height := devInfo.Display.Width, devInfo.Display.Height
 	service.Add("minicap", cmdctrl.CommandInfo{
 		Environ: []string{"LD_LIBRARY_PATH=/data/local/tmp"},
-		Args:    []string{"/data/local/tmp/minicap", "-S", "-P", fmt.Sprintf("%dx%d@800x800/0", width, height)},
+		Args: []string{"/data/local/tmp/minicap", "-S", "-P",
+			fmt.Sprintf("%dx%d@%dx%d/0", width, height, displayMaxWidthHeight, displayMaxWidthHeight)},
 	})
 	service.Add("minitouch", cmdctrl.CommandInfo{
 		Args: []string{"/data/local/tmp/minitouch"},
@@ -141,10 +143,18 @@ func fileExists(path string) bool {
 }
 
 var (
-	propOnce       sync.Once
-	properties     map[string]string
-	deviceRotation int
+	propOnce              sync.Once
+	properties            map[string]string
+	deviceRotation        int
+	displayMaxWidthHeight = 800
 )
+
+func updateMinicapRotation(rotation int) {
+	devInfo := getDeviceInfo()
+	width, height := devInfo.Display.Width, devInfo.Display.Height
+	service.UpdateArgs("minicap", "/data/local/tmp/minicap", "-S", "-P",
+		fmt.Sprintf("%dx%d@%dx%d/%d", width, height, displayMaxWidthHeight, displayMaxWidthHeight, rotation))
+}
 
 func getProperty(name string) string {
 	propOnce.Do(func() {
@@ -588,9 +598,11 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		json.NewDecoder(r.Body).Decode(&direction)
 		deviceRotation = direction * 90
 		log.Println("rotation change received:", deviceRotation)
-		devInfo := getDeviceInfo()
-		width, height := devInfo.Display.Width, devInfo.Display.Height
-		go service.UpdateArgs("minicap", "/data/local/tmp/minicap", "-S", "-P", fmt.Sprintf("%dx%d@800x800/%d", width, height, deviceRotation))
+		updateMinicapRotation(deviceRotation)
+		// devInfo := getDeviceInfo()
+		// width, height := devInfo.Display.Width, devInfo.Display.Height
+		// go service.UpdateArgs("minicap", "/data/local/tmp/minicap", "-S", "-P",
+		// 	fmt.Sprintf("%dx%d@%dx%d/%d", width, height, displayMaxWidthHeight, displayMaxWidthHeight, deviceRotation))
 		io.WriteString(w, "Success")
 	})
 
@@ -812,10 +824,14 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 				}
 				log.Println("unix @minitouch connected, accepting requests")
 				retries = 0 // connected, reset retries
-				if err := drainTouchRequests(conn, operC); err != nil {
-					log.Println("drain touch requests err:", err)
-				}
+				err = drainTouchRequests(conn, operC)
 				conn.Close()
+				if err != nil {
+					log.Println("drain touch requests err:", err)
+				} else {
+					log.Println("unix @minitouch disconnected")
+					break // operC closed
+				}
 			}
 		}()
 		var touchRequest TouchRequest
@@ -824,13 +840,14 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 			if err != nil {
 				log.Println("readJson err:", err)
 				quitC <- true
+				break
 			}
 			select {
 			case operC <- touchRequest:
 			case <-time.After(2 * time.Second):
 				wsWrite(websocket.TextMessage, []byte("touch request buffer full"))
 			}
-			log.Printf("recieve: %v", touchRequest)
+			// log.Printf("recieve: %v", touchRequest)
 		}
 	})
 
@@ -855,16 +872,16 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		// TODO
 		wsWrite(websocket.TextMessage, []byte("dial unix:@minicap"))
 		log.Printf("minicap connection: %v", r.RemoteAddr)
-		jpgC := make(chan []byte, 10)
+		dataC := make(chan []byte, 10)
 		quitC := make(chan bool, 2)
 
 		go func() {
-			defer close(jpgC)
+			defer close(dataC)
 			retries := 0
 			for {
 				if retries > 10 {
 					log.Println("unix @minicap connect failed")
-					wsWrite(websocket.TextMessage, []byte("@minicap listen timeout, possibly minicap not installed"))
+					dataC <- []byte("@minicap listen timeout, possibly minicap not installed")
 					break
 				}
 				conn, err := net.Dial("unix", "@minicap")
@@ -878,8 +895,9 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 					}
 					continue
 				}
+				dataC <- []byte("rotation " + strconv.Itoa(deviceRotation))
 				retries = 0 // connected, reset retries
-				if er := translateMinicap(conn, jpgC, quitC); er == nil {
+				if er := translateMinicap(conn, dataC, quitC); er == nil {
 					conn.Close()
 					log.Println("transfer closed")
 					break
@@ -897,12 +915,18 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 				}
 			}
 		}()
-		for data := range jpgC {
-			if err := wsWrite(websocket.TextMessage, []byte("data size: "+strconv.Itoa(len(data)))); err != nil {
-				break
-			}
-			if err := wsWrite(websocket.BinaryMessage, data); err != nil {
-				break
+		for data := range dataC {
+			if string(data[:2]) == "\xff\xd8" { // jpeg data
+				if err := wsWrite(websocket.BinaryMessage, data); err != nil {
+					break
+				}
+				if err := wsWrite(websocket.TextMessage, []byte("data size: "+strconv.Itoa(len(data)))); err != nil {
+					break
+				}
+			} else {
+				if err := wsWrite(websocket.TextMessage, data); err != nil {
+					break
+				}
 			}
 		}
 		quitC <- true
@@ -1042,7 +1066,8 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 
 	m.Handle("/assets/{(.*)}", http.StripPrefix("/assets", http.FileServer(Assets)))
 
-	httpServer = &http.Server{Handler: m} // url(/stop) need it.
+	var handler = cors.New(cors.Options{}).Handler(m)
+	httpServer = &http.Server{Handler: handler} // url(/stop) need it.
 	return httpServer.Serve(lis)
 }
 
@@ -1167,6 +1192,17 @@ func main() {
 	if *fTunnelServer != "" {
 		go tunnel.RunForever()
 	}
+
+	sigc := make(chan os.Signal, 1)
+	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		for sig := range sigc {
+			log.Println(sig)
+			service.StopAll()
+			os.Exit(0)
+			httpServer.Shutdown(context.TODO())
+		}
+	}()
 	// run server forever
 	if err := ServeHTTP(listener, tunnel); err != nil {
 		log.Println("server quit:", err)
