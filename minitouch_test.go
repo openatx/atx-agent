@@ -47,7 +47,7 @@ $ 25654`),
 		Index:     1,
 		PercentX:  1.0,
 		PercentY:  1.0,
-		Pressure:  10,
+		Pressure:  1,
 	}
 	reqC <- TouchRequest{
 		Operation: "c",
@@ -57,7 +57,7 @@ $ 25654`),
 		Index:     3,
 		PercentX:  0.5,
 		PercentY:  0.5,
-		Pressure:  30,
+		Pressure:  1,
 	}
 	reqC <- TouchRequest{
 		Operation: "u",
@@ -66,5 +66,5 @@ $ 25654`),
 	close(reqC)
 	drainTouchRequests(conn, reqC)
 	output := string(conn.buffer.Bytes())
-	assert.Equal(t, "d 1 1080 1920 10\nc\nm 3 540 960 30\nu 4\n", output)
+	assert.Equal(t, "d 1 1080 1920 255\nc\nm 3 540 960 255\nu 4\n", output)
 }
