@@ -1128,6 +1128,8 @@ func main() {
 
 	if os.Getenv("IGNORE_SIGHUP") == "true" {
 		fmt.Println("Enter into daemon mode")
+		os.Unsetenv("IGNORE_SIGHUP")
+
 		f, err := os.Create("/sdcard/atx-agent.log")
 		if err != nil {
 			panic(err)
