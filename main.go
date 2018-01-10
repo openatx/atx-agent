@@ -69,6 +69,32 @@ func init() {
 	})
 }
 
+// singleFight for http request
+// - minicap
+// - minitouch
+var muxMutex = sync.Mutex{}
+var muxLocks = make(map[string]bool)
+
+func singleFightWrap(handleFunc func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		muxMutex.Lock()
+		if _, ok := muxLocks[r.RequestURI]; ok {
+			muxMutex.Unlock()
+			log.Println("singlefight conflict", r.RequestURI)
+			http.Error(w, "singlefight conflicts", http.StatusTooManyRequests) // code: 429
+			return
+		}
+		muxLocks[r.RequestURI] = true
+		muxMutex.Unlock()
+
+		handleFunc(w, r) // handle requests
+
+		muxMutex.Lock()
+		delete(muxLocks, r.RequestURI)
+		muxMutex.Unlock()
+	}
+}
+
 // Get preferred outbound ip of this machine
 func getOutboundIP() (ip net.IP, err error) {
 	conn, err := net.Dial("udp", "8.8.8.8:80")
@@ -168,14 +194,6 @@ func getProperty(name string) string {
 	return properties[name]
 }
 
-func installRequirements() error {
-	log.Println("install uiautomator apk")
-	if err := installUiautomatorAPK(); err != nil {
-		return err
-	}
-	return installMinicap()
-}
-
 const (
 	apkVersionCode = 4
 	apkVersionName = "1.0.4"
@@ -230,73 +248,6 @@ func installAPKForce(path string, packageName string) error {
 	}
 	runShell("pm", "uninstall", packageName)
 	return installAPK(path)
-}
-
-func installUiautomatorAPK() error {
-	if runtime.GOOS == "windows" {
-		return nil
-	}
-	if checkUiautomatorInstalled() {
-		return nil
-	}
-	baseURL := "https://github.com/openatx/android-uiautomator-server/releases/download/" + apkVersionName
-	if _, err := httpDownload("/data/local/tmp/app-debug.apk", baseURL+"/app-uiautomator.apk", 0644); err != nil {
-		return err
-	}
-	if _, err := httpDownload("/data/local/tmp/app-debug-test.apk", baseURL+"/app-uiautomator-test.apk", 0644); err != nil {
-		return err
-	}
-	if err := installAPKForce("/data/local/tmp/app-debug.apk", "com.github.uiautomator"); err != nil {
-		return err
-	}
-	if err := installAPKForce("/data/local/tmp/app-debug-test.apk", "com.github.uiautomator.test"); err != nil {
-		return err
-	}
-	return nil
-}
-
-func installMinicap() error {
-	if runtime.GOOS == "windows" {
-		return nil
-	}
-	log.Println("install minicap")
-	if fileExists("/data/local/tmp/minicap") && fileExists("/data/local/tmp/minicap.so") {
-		if err := Screenshot("/dev/null"); err != nil {
-			log.Println("err:", err)
-		} else {
-			return nil
-		}
-	}
-	minicapSource := "https://github.com/codeskyblue/stf-binaries/raw/master/node_modules/minicap-prebuilt/prebuilt"
-	propOutput, err := runShell("getprop")
-	if err != nil {
-		return err
-	}
-	re := regexp.MustCompile(`\[(.*?)\]:\s*\[(.*?)\]`)
-	matches := re.FindAllStringSubmatch(string(propOutput), -1)
-	props := make(map[string]string)
-	for _, m := range matches {
-		var key = m[1]
-		var val = m[2]
-		props[key] = val
-	}
-	abi := props["ro.product.cpu.abi"]
-	sdk := props["ro.build.version.sdk"]
-	pre := props["ro.build.version.preview_sdk"]
-	if pre != "" && pre != "0" {
-		sdk = sdk + pre
-	}
-	binURL := strings.Join([]string{minicapSource, abi, "bin", "minicap"}, "/")
-	_, err = httpDownload("/data/local/tmp/minicap", binURL, 0755)
-	if err != nil {
-		return err
-	}
-	libURL := strings.Join([]string{minicapSource, abi, "lib", "android-" + sdk, "minicap.so"}, "/")
-	_, err = httpDownload("/data/local/tmp/minicap.so", libURL, 0644)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func Screenshot(filename string) (err error) {
@@ -777,7 +728,7 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		io.WriteString(w, version)
 	})
 
-	m.HandleFunc("/minitouch", func(w http.ResponseWriter, r *http.Request) {
+	m.HandleFunc("/minitouch", singleFightWrap(func(w http.ResponseWriter, r *http.Request) {
 		ws, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Print("upgrade:", err)
@@ -849,9 +800,9 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 			}
 			// log.Printf("recieve: %v", touchRequest)
 		}
-	})
+	}))
 
-	m.HandleFunc("/minicap", func(w http.ResponseWriter, r *http.Request) {
+	m.HandleFunc("/minicap", singleFightWrap(func(w http.ResponseWriter, r *http.Request) {
 		ws, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			log.Print("upgrade:", err)
@@ -869,6 +820,7 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 			wsWrite(websocket.TextMessage, []byte("@minicap service start failed: "+err.Error()))
 			return
 		}
+		defer service.Stop("minicap")
 		// TODO
 		wsWrite(websocket.TextMessage, []byte("dial unix:@minicap"))
 		log.Printf("minicap connection: %v", r.RemoteAddr)
@@ -931,7 +883,7 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		}
 		quitC <- true
 		log.Println("stream finished")
-	})
+	}))
 
 	// FIXME(ssx): screenrecord is not good enough, need to change later
 	var recordCmd *exec.Cmd
