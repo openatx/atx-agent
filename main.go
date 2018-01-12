@@ -15,7 +15,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
-	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -467,12 +466,6 @@ func translateMinicap(conn net.Conn, jpgC chan []byte, quitC chan bool) error {
 	}
 	return err
 }
-
-// var workers = syncmap.New()
-
-// goInstallApk := func(filepath string) (key string){
-
-// 		}
 
 func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 	m := mux.NewRouter()
@@ -998,8 +991,29 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		http.Redirect(w, r, "/screenshot/0", 302)
 	}).Methods("GET")
 
-	target, _ := url.Parse("http://127.0.0.1:9008")
-	uiautomatorProxy := httputil.NewSingleHostReverseProxy(target)
+	// target, _ := url.Parse("http://127.0.0.1:9008")
+	// uiautomatorProxy := httputil.NewSingleHostReverseProxy(target)
+	uiautomatorProxy := &httputil.ReverseProxy{
+		Director: func(req *http.Request) {
+			req.URL.Scheme = "http"
+			req.URL.Host = "127.0.0.1:9008"
+		},
+		Transport: &http.Transport{
+			// Ref: https://golang.org/pkg/net/http/#RoundTripper
+			Dial: func(network, addr string) (net.Conn, error) {
+				conn, err := (&net.Dialer{
+					Timeout:   10 * time.Second,
+					KeepAlive: 30 * time.Second,
+					DualStack: true,
+				}).Dial(network, addr)
+				return conn, err
+			},
+			MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+	}
 	m.Handle("/jsonrpc/0", uiautomatorProxy)
 	m.Handle("/ping", uiautomatorProxy)
 	m.HandleFunc("/screenshot/0", func(w http.ResponseWriter, r *http.Request) {
