@@ -538,16 +538,22 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 	}).Methods("POST")
 
 	m.HandleFunc("/info/rotation", func(w http.ResponseWriter, r *http.Request) {
-		var direction int // 0,1,2,3
-		json.NewDecoder(r.Body).Decode(&direction)
-		deviceRotation = direction * 90
-		log.Println("rotation change received:", deviceRotation)
+		var direction int                                 // 0,1,2,3
+		err := json.NewDecoder(r.Body).Decode(&direction) // TODO: auto get rotation
+		if err == nil {
+			deviceRotation = direction * 90
+			log.Println("rotation change received:", deviceRotation)
+		} else {
+			rotation, er := androidutils.Rotation()
+			if er != nil {
+				log.Println("rotation auto get err:", er)
+				http.Error(w, "Failure", 500)
+				return
+			}
+			deviceRotation = rotation
+		}
 		updateMinicapRotation(deviceRotation)
-		// devInfo := getDeviceInfo()
-		// width, height := devInfo.Display.Width, devInfo.Display.Height
-		// go service.UpdateArgs("minicap", "/data/local/tmp/minicap", "-S", "-P",
-		// 	fmt.Sprintf("%dx%d@%dx%d/%d", width, height, displayMaxWidthHeight, displayMaxWidthHeight, deviceRotation))
-		io.WriteString(w, "Success")
+		fmt.Fprintf(w, "rotation change to %d", deviceRotation)
 	})
 
 	m.HandleFunc("/upload/{target:.*}", func(w http.ResponseWriter, r *http.Request) {
