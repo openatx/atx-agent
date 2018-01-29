@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -17,57 +18,74 @@ import (
 	"github.com/franela/goreq"
 )
 
+const defaultDownloadTimeout = 30 * time.Minute
+
 var background = &Background{
 	sm: syncmap.New(),
 }
 
-type BackgroundStatus struct {
-	Message  string      `json:"message"`
-	Progress interface{} `json:"progress"`
+type BackgroundState struct {
+	Message     string      `json:"message"`
+	Error       string      `json:"error"`
+	Progress    interface{} `json:"progress"`
+	PackageName string      `json:"packageName,omitempty"`
+
+	err error
+	wg  sync.WaitGroup
 }
 
 type Background struct {
-	sm *syncmap.SyncMap
-	n  int
-	mu sync.Mutex
+	sm    *syncmap.SyncMap
+	n     int
+	mu    sync.Mutex
+	timer *time.Timer
 }
 
 // Get return nil if not found
-func (b *Background) Get(key string) (status *BackgroundStatus) {
+func (b *Background) Get(key string) (status *BackgroundState) {
 	value, ok := b.sm.Get(key)
 	if !ok {
 		return nil
 	}
-	return value.(*BackgroundStatus)
+	if b.timer != nil {
+		b.delayDelete(key)
+	}
+	return value.(*BackgroundState)
 }
 
 // func (b *Background) InstallApk(filepath string) (key string) {
 // 	return
 // }
 
-func (b *Background) genKey() string {
+func (b *Background) genKey() (key string, state *BackgroundState) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.n++
-	key := fmt.Sprintf("%d", b.n)
-	b.sm.Set(key, &BackgroundStatus{})
-	return key
+	key = fmt.Sprintf("%d", b.n)
+	state = &BackgroundState{}
+	b.sm.Set(key, state)
+	return
 }
 
 func (b *Background) delayDelete(key string) {
-	go func() {
-		time.Sleep(5 * time.Minute)
-		b.sm.Delete(key)
-	}()
+	delay := 5 * time.Minute
+	if b.timer == nil {
+		b.timer = time.AfterFunc(delay, func() {
+			b.sm.Delete(key)
+		})
+	} else {
+		b.timer.Reset(delay)
+	}
 }
 
 func (b *Background) HTTPDownload(urlStr string, dst string, mode os.FileMode) (key string) {
-	key = b.genKey()
+	key, state := b.genKey()
+	state.wg.Add(1)
 	go func() {
 		defer b.delayDelete(key)
 		b.Get(key).Message = "downloading"
-		if err := b.doHTTPDownload(urlStr, dst, key, mode); err != nil {
-			b.Get(key).Message = "error: " + err.Error()
+		if err := b.doHTTPDownload(key, urlStr, dst, mode); err != nil {
+			b.Get(key).Message = "http download: " + err.Error()
 		} else {
 			b.Get(key).Message = "downloaded"
 		}
@@ -75,7 +93,26 @@ func (b *Background) HTTPDownload(urlStr string, dst string, mode os.FileMode) (
 	return
 }
 
-func (b *Background) doHTTPDownload(urlStr string, dst string, key string, fileMode os.FileMode) (err error) {
+func (b *Background) Wait(key string) error {
+	state := b.Get(key)
+	if state == nil {
+		return errors.New("not found key: " + key)
+	}
+	state.wg.Wait()
+	return state.err
+}
+
+// Default download timeout 30 minutes
+func (b *Background) doHTTPDownload(key, urlStr, dst string, fileMode os.FileMode) (err error) {
+	state := b.Get(key)
+	if state == nil {
+		panic("http download key invalid: " + key)
+	}
+	defer func() {
+		state.err = err
+		state.wg.Done()
+	}()
+
 	res, err := goreq.Request{
 		Uri:             urlStr,
 		MaxRedirects:    10,
@@ -93,6 +130,9 @@ func (b *Background) doHTTPDownload(urlStr string, dst string, key string, fileM
 		return errors.New(body)
 	}
 
+	// mkdir is not exists
+	os.MkdirAll(filepath.Dir(dst), 0755)
+
 	file, err := os.Create(dst)
 	if err != nil {
 		return
@@ -105,12 +145,61 @@ func (b *Background) doHTTPDownload(urlStr string, dst string, key string, fileM
 	defer wrproxy.Done()
 	b.Get(key).Progress = wrproxy
 
+	// timeout here
+	timer := time.AfterFunc(defaultDownloadTimeout, func() {
+		res.Body.Close()
+	})
+	defer timer.Stop()
+
 	_, err = io.Copy(wrproxy, res.Body)
 	if err != nil {
-		return err
+		return
 	}
 	if fileMode != 0 {
 		os.Chmod(dst, fileMode)
 	}
 	return
+}
+
+type downloadProxy struct {
+	// Id         string      `json:"id"`
+	// Message    string      `json:"message"`
+	// ExtraData  interface{} `json:"extraData,omitempty"`
+	canceled   bool
+	writer     io.Writer
+	TotalSize  int    `json:"totalSize"`
+	CopiedSize int    `json:"copiedSize"`
+	Error      string `json:"error,omitempty"`
+	wg         sync.WaitGroup
+}
+
+func newDownloadProxy(wr io.Writer, totalSize int) *downloadProxy {
+	di := &downloadProxy{
+		writer:    wr,
+		TotalSize: totalSize,
+	}
+	di.wg.Add(1)
+	return di
+}
+
+func (d *downloadProxy) Cancel() {
+	d.canceled = true
+}
+
+func (d *downloadProxy) Write(data []byte) (int, error) {
+	if d.canceled {
+		return 0, errors.New("download proxy was canceled")
+	}
+	n, err := d.writer.Write(data)
+	d.CopiedSize += n
+	return n, err
+}
+
+// Should only call once
+func (d *downloadProxy) Done() {
+	d.wg.Done()
+}
+
+func (d *downloadProxy) Wait() {
+	d.wg.Wait()
 }

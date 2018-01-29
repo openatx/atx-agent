@@ -29,7 +29,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/DeanThompson/syncmap"
 	"github.com/codeskyblue/kexec"
 	"github.com/franela/goreq"
 	"github.com/gorilla/mux"
@@ -270,30 +269,30 @@ func Screenshot(filename string) (err error) {
 }
 
 type DownloadManager struct {
-	db map[string]*DownloadProxy
+	db map[string]*downloadProxy
 	mu sync.Mutex
 	n  int
 }
 
 func newDownloadManager() *DownloadManager {
 	return &DownloadManager{
-		db: make(map[string]*DownloadProxy, 10),
+		db: make(map[string]*downloadProxy, 10),
 	}
 }
 
-func (m *DownloadManager) Get(id string) *DownloadProxy {
+func (m *DownloadManager) Get(id string) *downloadProxy {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.db[id]
 }
 
-func (m *DownloadManager) Put(di *DownloadProxy) (id string) {
+func (m *DownloadManager) Put(di *downloadProxy) (id string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.n += 1
 	id = strconv.Itoa(m.n)
 	m.db[id] = di
-	di.Id = id
+	// di.Id = id
 	return id
 }
 
@@ -310,42 +309,7 @@ func (m *DownloadManager) DelayDel(id string, sleep time.Duration) {
 	}()
 }
 
-type DownloadProxy struct {
-	writer     io.Writer
-	Id         string      `json:"id"`
-	TotalSize  int         `json:"totalSize"`
-	CopiedSize int         `json:"copiedSize"`
-	Message    string      `json:"message"`
-	Error      string      `json:"error,omitempty"`
-	ExtraData  interface{} `json:"extraData,omitempty"`
-	wg         sync.WaitGroup
-}
-
-func newDownloadProxy(wr io.Writer, totalSize int) *DownloadProxy {
-	di := &DownloadProxy{
-		writer:    wr,
-		TotalSize: totalSize,
-	}
-	di.wg.Add(1)
-	return di
-}
-
-func (d *DownloadProxy) Write(data []byte) (int, error) {
-	n, err := d.writer.Write(data)
-	d.CopiedSize += n
-	return n, err
-}
-
-// Should only call once
-func (d *DownloadProxy) Done() {
-	d.wg.Done()
-}
-
-func (d *DownloadProxy) Wait() {
-	d.wg.Wait()
-}
-
-func AsyncDownloadTo(url string, filepath string, autoRelease bool) (di *DownloadProxy, err error) {
+func AsyncDownloadTo(url string, filepath string, autoRelease bool) (di *downloadProxy, err error) {
 	// do real http download
 	res, err := goreq.Request{
 		Uri:             url,
@@ -472,6 +436,10 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 
 	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		renderHTML(w, "index.html")
+	})
+
+	m.HandleFunc("/version", func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, version)
 	})
 
 	m.HandleFunc("/remote", func(w http.ResponseWriter, r *http.Request) {
@@ -610,8 +578,6 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		})
 	})
 
-	installThreads := syncmap.New()
-
 	m.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
 		dst := r.FormValue("filepath")
 		url := r.FormValue("url")
@@ -631,101 +597,62 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		json.NewEncoder(w).Encode(status)
 	}).Methods("GET")
 
-	// TODO: need test
-	m.HandleFunc("/install-local", func(w http.ResponseWriter, r *http.Request) {
-		filepath := r.FormValue("filepath")
-		key := fmt.Sprintf("k%d", time.Now().Nanosecond())
-		go func(key string) {
-			update := func(v map[string]string) {
-				installThreads.Set(key, v)
-			}
-			go func() {
-				time.Sleep(5 * time.Minute)
-				installThreads.Delete(key)
-			}()
-			update(map[string]string{"message": "apk parsing"})
-			pkg, er := apk.OpenFile(filepath)
-			if er != nil {
-				update(map[string]string{
-					"error":   er.Error(),
-					"message": "androidbinary parse apk error",
-				})
-				return
-			}
-			defer pkg.Close()
-			packageName := pkg.PackageName()
-			update(map[string]string{
-				"message":   "installing",
-				"extraData": packageName,
-			})
-			// install apk
-			err := installAPKForce(filepath, packageName)
-			if err != nil {
-				update(map[string]string{
-					"error":   err.Error(),
-					"message": "error install",
-				})
-			} else {
-				update(map[string]string{"message": "success installed"})
-			}
-		}(key)
-		io.WriteString(w, key)
-	})
-
 	m.HandleFunc("/install", func(w http.ResponseWriter, r *http.Request) {
-		url := r.FormValue("url")
-		filepath := r.FormValue("filepath")
-		if filepath == "" {
-			filepath = "/sdcard/tmp.apk"
-		}
-		di, err := AsyncDownloadTo(url, filepath, false) // use false to disable DownloadProxy auto recycle
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		di.Message = "downloading"
+		var url = r.FormValue("url")
+		filepath := TempFileName("/sdcard/tmp", ".apk")
+		key := background.HTTPDownload(url, filepath, 0644)
 		go func() {
-			di.Wait() // wait download finished
-			if runtime.GOOS == "windows" {
-				log.Println("fake pm install")
-				downManager.Del(di.Id)
+			defer os.Remove(filepath) // release sdcard space
+
+			state := background.Get(key)
+			if err := background.Wait(key); err != nil {
+				log.Println("http download error")
+				state.Error = err.Error()
+				state.Message = "http download error"
 				return
 			}
-			defer downManager.DelayDel(di.Id, time.Minute*5)
 
-			di.Message = "apk parsing"
+			state.Message = "apk parsing"
 			pkg, er := apk.OpenFile(filepath)
 			if er != nil {
-				di.Error = er.Error()
-				di.Message = "androidbinary parse apk error"
+				state.Error = er.Error()
+				state.Message = "androidbinary parse apk error"
 				return
 			}
 			defer pkg.Close()
 			packageName := pkg.PackageName()
-			di.ExtraData = packageName
-			// install apk
-			di.Message = "installing"
-			err := installAPKForce(filepath, packageName)
-			if err != nil {
-				di.Error = err.Error()
-				di.Message = "error install"
+			state.PackageName = packageName
+
+			state.Message = "installing"
+			if err := installAPKForce(filepath, packageName); err != nil {
+				state.Error = err.Error()
+				state.Message = "error install"
 			} else {
-				di.Message = "success installed"
+				state.Message = "success installed"
 			}
 		}()
-		io.WriteString(w, di.Id)
+		io.WriteString(w, key)
 	}).Methods("POST")
 
 	m.HandleFunc("/install/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := mux.Vars(r)["id"]
-		dp := downManager.Get(id)
+		state := background.Get(id)
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(dp)
+		json.NewEncoder(w).Encode(state)
 	}).Methods("GET")
 
-	m.HandleFunc("/version", func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, version)
-	})
+	m.HandleFunc("/install/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := mux.Vars(r)["id"]
+		state := background.Get(id)
+		if state.Progress != nil {
+			if dproxy, ok := state.Progress.(*downloadProxy); ok {
+				dproxy.Cancel()
+				io.WriteString(w, "Cancelled")
+				return
+			}
+		}
+		io.WriteString(w, "Unable to canceled")
+	}).Methods("DELETE")
 
 	m.HandleFunc("/minitouch", singleFightWrap(func(w http.ResponseWriter, r *http.Request) {
 		ws, err := upgrader.Upgrade(w, r, nil)
@@ -797,7 +724,6 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 			case <-time.After(2 * time.Second):
 				wsWrite(websocket.TextMessage, []byte("touch request buffer full"))
 			}
-			// log.Printf("recieve: %v", touchRequest)
 		}
 	}))
 
@@ -884,6 +810,7 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		log.Println("stream finished")
 	}))
 
+	// TODO(ssx): perfer to delete
 	// FIXME(ssx): screenrecord is not good enough, need to change later
 	var recordCmd *exec.Cmd
 	var recordDone = make(chan bool, 1)
@@ -1008,14 +935,14 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 			// Ref: https://golang.org/pkg/net/http/#RoundTripper
 			Dial: func(network, addr string) (net.Conn, error) {
 				conn, err := (&net.Dialer{
-					Timeout:   10 * time.Second,
+					Timeout:   5 * time.Second,
 					KeepAlive: 30 * time.Second,
 					DualStack: true,
 				}).Dial(network, addr)
 				return conn, err
 			},
 			MaxIdleConns:          100,
-			IdleConnTimeout:       90 * time.Second,
+			IdleConnTimeout:       180 * time.Second,
 			TLSHandshakeTimeout:   10 * time.Second,
 			ExpectContinueTimeout: 1 * time.Second,
 		},
