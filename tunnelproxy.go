@@ -73,20 +73,27 @@ type TunnelProxy struct {
 
 func (this *TunnelProxy) RunForever() {
 	var t time.Time
-	n := 0
+	downCount := 0
 	for {
 		t = time.Now()
 		this.run()
 		// unsafeRunTunnelProxy(serverAddr)
 		if time.Since(t) > time.Minute {
-			n = 0
+			downCount = 0
+			// n = 0
 		}
-		n++
-		if n > 5 {
-			n = 5
+		if downCount == 0 { // only do on the first disconnect
+			// open identify when disconnected to force WIFI reconnected
+			runShellTimeout(time.Minute, "am", "start", "-n", "com.github.uiautomator/.IdentifyActivity")
 		}
-		log.Printf("dial server error, reconnect after %d seconds", n*5)
-		time.Sleep(time.Duration(n) * 5 * time.Second) // 5, 10, ... 50s
+
+		// idle
+		downCount++
+		if downCount > 5 {
+			downCount = 5
+		}
+		log.Printf("dial server error, reconnect after %d seconds", downCount*5)
+		time.Sleep(time.Duration(downCount) * 5 * time.Second) // 5, 10, ... 50s
 	}
 }
 

@@ -129,14 +129,6 @@ type MinicapInfo struct {
 	Density  float32 `json:"density"`
 }
 
-func runShell(args ...string) (output []byte, err error) {
-	return exec.Command("sh", "-c", strings.Join(args, " ")).CombinedOutput()
-}
-
-func runShellOutput(args ...string) (output []byte, err error) {
-	return exec.Command("sh", "-c", strings.Join(args, " ")).Output()
-}
-
 func httpDownload(path string, urlStr string, perms os.FileMode) (written int64, err error) {
 	resp, err := goreq.Request{
 		Uri:             urlStr,
