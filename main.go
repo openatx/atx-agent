@@ -473,7 +473,7 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 	}).Methods("POST")
 
 	m.HandleFunc("/uiautomator", func(w http.ResponseWriter, r *http.Request) {
-		err := service.Stop("uiautomator")
+		err := service.Stop("uiautomator", true) // wait until program quit
 		if err == nil {
 			io.WriteString(w, "Success")
 		} else {

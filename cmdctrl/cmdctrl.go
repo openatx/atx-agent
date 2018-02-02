@@ -101,17 +101,24 @@ func (cc *CommandCtrl) Start(name string) error {
 	return pkeeper.start()
 }
 
-// Stop send stop signal and quit immediately
-func (cc *CommandCtrl) Stop(name string) error {
+// Stop send stop signal
+// Stop("demo") will quit immediately
+// Stop("demo", true) will quit until command really killed
+func (cc *CommandCtrl) Stop(name string, waits ...bool) error {
 	cc.rl.RLock()
 	defer cc.rl.RUnlock()
 	pkeeper, ok := cc.cmds[name]
 	if !ok {
 		return errors.New("cmdctl not found: " + name)
 	}
-	return pkeeper.stop(false)
+	wait := false
+	if len(waits) > 0 {
+		wait = waits[0]
+	}
+	return pkeeper.stop(wait)
 }
 
+// StopAll command and wait until all program quited
 func (cc *CommandCtrl) StopAll() {
 	for _, pkeeper := range cc.cmds {
 		pkeeper.stop(true)
