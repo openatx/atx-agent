@@ -443,13 +443,56 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		if command == "" {
 			command = r.FormValue("c")
 		}
-		output, err := exec.Command("sh", "-c", command).CombinedOutput()
+		c := Command{
+			Args:    []string{command},
+			Shell:   true,
+			Timeout: 1 * time.Minute,
+		}
+		output, err := c.Output()
 		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"output": string(output),
 			"error":  err,
 		})
 	}).Methods("GET", "POST")
+
+	m.HandleFunc("/shell/stream", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		command := r.FormValue("command")
+		if command == "" {
+			command = r.FormValue("c")
+		}
+		c := exec.Command("sh", "-c", command)
+
+		httpWriter := newFakeWriter(func(data []byte) (int, error) {
+			n, err := w.Write(data)
+			if err == nil {
+				if f, ok := w.(http.Flusher); ok {
+					f.Flush()
+				}
+			} else {
+				log.Println("Write error")
+			}
+			return n, err
+		})
+		c.Stdout = httpWriter
+		c.Stderr = httpWriter
+
+		// wait until program quit
+		cmdQuit := make(chan error, 0)
+		go func() {
+			cmdQuit <- c.Run()
+		}()
+		select {
+		case <-httpWriter.Err:
+			if c.Process != nil {
+				c.Process.Signal(syscall.SIGTERM)
+			}
+		case <-cmdQuit:
+			log.Println("command quit")
+		}
+		log.Println("program quit")
+	})
 
 	m.HandleFunc("/stop", func(w http.ResponseWriter, r *http.Request) {
 		log.Println("stop all service")
