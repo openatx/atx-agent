@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/codeskyblue/kexec"
+	"github.com/codeskyblue/procfs"
 	"github.com/franela/goreq"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
@@ -54,17 +55,6 @@ var (
 
 func init() {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
-
-	devInfo := getDeviceInfo()
-	width, height := devInfo.Display.Width, devInfo.Display.Height
-	service.Add("minicap", cmdctrl.CommandInfo{
-		Environ: []string{"LD_LIBRARY_PATH=/data/local/tmp"},
-		Args: []string{"/data/local/tmp/minicap", "-S", "-P",
-			fmt.Sprintf("%dx%d@%dx%d/0", width, height, displayMaxWidthHeight, displayMaxWidthHeight)},
-	})
-	service.Add("minitouch", cmdctrl.CommandInfo{
-		Args: []string{"/data/local/tmp/minitouch"},
-	})
 }
 
 // singleFight for http request
@@ -366,6 +356,30 @@ func renderHTML(w http.ResponseWriter, filename string) {
 
 var (
 	ErrJpegWrongFormat = errors.New("jpeg format error, not starts with 0xff,0xd8")
+
+	// target, _ := url.Parse("http://127.0.0.1:9008")
+	// uiautomatorProxy := httputil.NewSingleHostReverseProxy(target)
+	uiautomatorProxy = &httputil.ReverseProxy{
+		Director: func(req *http.Request) {
+			req.URL.Scheme = "http"
+			req.URL.Host = "127.0.0.1:9008"
+		},
+		Transport: &http.Transport{
+			// Ref: https://golang.org/pkg/net/http/#RoundTripper
+			Dial: func(network, addr string) (net.Conn, error) {
+				conn, err := (&net.Dialer{
+					Timeout:   5 * time.Second,
+					KeepAlive: 30 * time.Second,
+					DualStack: true,
+				}).Dial(network, addr)
+				return conn, err
+			},
+			MaxIdleConns:          100,
+			IdleConnTimeout:       180 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+	}
 )
 
 type errorBinaryReader struct {
@@ -436,6 +450,67 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 
 	m.HandleFunc("/remote", func(w http.ResponseWriter, r *http.Request) {
 		renderHTML(w, "remote.html")
+	})
+
+	m.HandleFunc("/pidof/{pkgname}", func(w http.ResponseWriter, r *http.Request) {
+		pkgname := mux.Vars(r)["pkgname"]
+		if pid, err := pidOf(pkgname); err == nil {
+			io.WriteString(w, strconv.Itoa(pid))
+			return
+		}
+	})
+
+	m.HandleFunc("/session/{pkgname}", func(w http.ResponseWriter, r *http.Request) {
+		packageName := mux.Vars(r)["pkgname"]
+		mainActivity, err := mainActivityOf(packageName)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		flags := r.FormValue("flags")
+		if flags == "" {
+			flags = "-W -S" // W: wait launched, S: stop before started
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		output, err := runShellTimeout(10*time.Second, "am", "start", flags, "-n", packageName+"/"+mainActivity)
+		if err != nil {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success":      false,
+				"error":        err.Error(),
+				"output":       string(output),
+				"mainActivity": mainActivity,
+			})
+		} else {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"success":      true,
+				"mainActivity": mainActivity,
+				"output":       string(output),
+			})
+		}
+	}).Methods("POST")
+
+	m.HandleFunc("/session/{pid:[0-9]+}:{pkgname}/{url:ping|jsonrpc/0}", func(w http.ResponseWriter, r *http.Request) {
+		pkgname := mux.Vars(r)["pkgname"]
+		pid, _ := strconv.Atoi(mux.Vars(r)["pid"])
+
+		pfs, err := procfs.NewFS(procfs.DefaultMountPoint)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		proc, err := pfs.NewProc(pid)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusGone) // 410
+			return
+		}
+		cmdline, _ := proc.CmdLine()
+		if len(cmdline) != 1 || cmdline[0] != pkgname {
+			http.Error(w, fmt.Sprintf("cmdline expect [%s] but got %v", pkgname, cmdline), http.StatusGone)
+			return
+		}
+		r.URL.Path = "/" + mux.Vars(r)["url"]
+		uiautomatorProxy.ServeHTTP(w, r)
 	})
 
 	m.HandleFunc("/shell", func(w http.ResponseWriter, r *http.Request) {
@@ -959,29 +1034,6 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		http.Redirect(w, r, "/screenshot/0", 302)
 	}).Methods("GET")
 
-	// target, _ := url.Parse("http://127.0.0.1:9008")
-	// uiautomatorProxy := httputil.NewSingleHostReverseProxy(target)
-	uiautomatorProxy := &httputil.ReverseProxy{
-		Director: func(req *http.Request) {
-			req.URL.Scheme = "http"
-			req.URL.Host = "127.0.0.1:9008"
-		},
-		Transport: &http.Transport{
-			// Ref: https://golang.org/pkg/net/http/#RoundTripper
-			Dial: func(network, addr string) (net.Conn, error) {
-				conn, err := (&net.Dialer{
-					Timeout:   5 * time.Second,
-					KeepAlive: 30 * time.Second,
-					DualStack: true,
-				}).Dial(network, addr)
-				return conn, err
-			},
-			MaxIdleConns:          100,
-			IdleConnTimeout:       180 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
-		},
-	}
 	m.Handle("/jsonrpc/0", uiautomatorProxy)
 	m.Handle("/ping", uiautomatorProxy)
 	m.HandleFunc("/screenshot/0", func(w http.ResponseWriter, r *http.Request) {
@@ -1103,6 +1155,18 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// minicap + minitouch
+	devInfo := getDeviceInfo()
+	width, height := devInfo.Display.Width, devInfo.Display.Height
+	service.Add("minicap", cmdctrl.CommandInfo{
+		Environ: []string{"LD_LIBRARY_PATH=/data/local/tmp"},
+		Args: []string{"/data/local/tmp/minicap", "-S", "-P",
+			fmt.Sprintf("%dx%d@%dx%d/0", width, height, displayMaxWidthHeight, displayMaxWidthHeight)},
+	})
+	service.Add("minitouch", cmdctrl.CommandInfo{
+		Args: []string{"/data/local/tmp/minitouch"},
+	})
 
 	// uiautomator
 	service.Add("uiautomator", cmdctrl.CommandInfo{

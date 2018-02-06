@@ -4,13 +4,18 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"io"
+	"log"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
+	"github.com/codeskyblue/procfs"
 	shellquote "github.com/kballard/go-shellquote"
+	"github.com/shogo82148/androidbinary/apk"
 )
 
 // TempFileName generates a temporary filename for use in testing or whatever
@@ -138,4 +143,44 @@ func newFakeWriter(f func([]byte) (int, error)) *fakeWriter {
 		writeFunc: f,
 		Err:       make(chan error, 1),
 	}
+}
+
+// pidof
+func pidOf(packageName string) (pid int, err error) {
+	fs, err := procfs.NewFS(procfs.DefaultMountPoint)
+	if err != nil {
+		return
+	}
+	procs, err := fs.AllProcs()
+	if err != nil {
+		return
+	}
+	for _, proc := range procs {
+		cmdline, _ := proc.CmdLine()
+		if len(cmdline) == 1 && cmdline[0] == packageName {
+			return proc.PID, nil
+		}
+	}
+	return 0, errors.New("package not found")
+}
+
+// get main activity with packageName
+func mainActivityOf(packageName string) (activity string, err error) {
+	output, err := runShellOutput("pm", "list", "packages", "-f", packageName)
+	if err != nil {
+		log.Println("pm list err:", err)
+		return
+	}
+	matches := regexp.MustCompile(`package:(.+)=([.\w]+)`).FindAllStringSubmatch(string(output), -1)
+	for _, match := range matches {
+		if match[2] != packageName {
+			continue
+		}
+		pkg, err := apk.OpenFile(match[1])
+		if err != nil {
+			return "", err
+		}
+		return pkg.MainAcitivty()
+	}
+	return "", errors.New("package not found")
 }
