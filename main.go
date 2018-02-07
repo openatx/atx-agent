@@ -62,6 +62,7 @@ func init() {
 // - minitouch
 var muxMutex = sync.Mutex{}
 var muxLocks = make(map[string]bool)
+var muxConns = make(map[string]*websocket.Conn)
 
 func singleFightWrap(handleFunc func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -79,6 +80,33 @@ func singleFightWrap(handleFunc func(http.ResponseWriter, *http.Request)) func(h
 
 		muxMutex.Lock()
 		delete(muxLocks, r.RequestURI)
+		muxMutex.Unlock()
+	}
+}
+
+func singleFightNewerWebsocket(handleFunc func(http.ResponseWriter, *http.Request, *websocket.Conn)) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		muxMutex.Lock()
+		if oldWs, ok := muxConns[r.RequestURI]; ok {
+			oldWs.Close()
+			delete(muxConns, r.RequestURI)
+		}
+
+		wsConn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			http.Error(w, "websocket upgrade error", 500)
+			muxMutex.Unlock()
+			return
+		}
+		muxConns[r.RequestURI] = wsConn
+		muxMutex.Unlock()
+
+		handleFunc(w, r, wsConn) // handle request
+
+		muxMutex.Lock()
+		if muxConns[r.RequestURI] == wsConn { // release connection
+			delete(muxConns, r.RequestURI)
+		}
 		muxMutex.Unlock()
 	}
 }
@@ -117,35 +145,6 @@ type MinicapInfo struct {
 	Height   int     `json:"height"`
 	Rotation int     `json:"rotation"`
 	Density  float32 `json:"density"`
-}
-
-func httpDownload(path string, urlStr string, perms os.FileMode) (written int64, err error) {
-	resp, err := goreq.Request{
-		Uri:             urlStr,
-		RedirectHeaders: true,
-		MaxRedirects:    10,
-	}.Do()
-	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		err = fmt.Errorf("http download <%s> status %v", urlStr, resp.Status)
-		return
-	}
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, perms)
-	if err != nil {
-		return
-	}
-	defer file.Close()
-	written, err = io.Copy(file, resp.Body)
-	log.Println("http download:", written)
-	return
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
 }
 
 var (
@@ -464,7 +463,7 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		packageName := mux.Vars(r)["pkgname"]
 		mainActivity, err := mainActivityOf(packageName)
 		if err != nil {
-			http.Error(w, err.Error(), 500)
+			http.Error(w, err.Error(), http.StatusGone) // 410
 			return
 		}
 		flags := r.FormValue("flags")
@@ -764,12 +763,7 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		io.WriteString(w, "Unable to canceled")
 	}).Methods("DELETE")
 
-	m.HandleFunc("/minitouch", singleFightWrap(func(w http.ResponseWriter, r *http.Request) {
-		ws, err := upgrader.Upgrade(w, r, nil)
-		if err != nil {
-			log.Print("upgrade:", err)
-			return
-		}
+	m.HandleFunc("/minitouch", singleFightNewerWebsocket(func(w http.ResponseWriter, r *http.Request, ws *websocket.Conn) {
 		defer ws.Close()
 		const wsWriteWait = 10 * time.Second
 		wsWrite := func(messageType int, data []byte) error {
@@ -837,12 +831,7 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		}
 	}))
 
-	m.HandleFunc("/minicap", singleFightWrap(func(w http.ResponseWriter, r *http.Request) {
-		ws, err := upgrader.Upgrade(w, r, nil)
-		if err != nil {
-			log.Print("upgrade:", err)
-			return
-		}
+	m.HandleFunc("/minicap", singleFightNewerWebsocket(func(w http.ResponseWriter, r *http.Request, ws *websocket.Conn) {
 		defer ws.Close()
 
 		const wsWriteWait = 10 * time.Second
@@ -850,13 +839,12 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 			ws.SetWriteDeadline(time.Now().Add(wsWriteWait))
 			return ws.WriteMessage(messageType, data)
 		}
-		wsWrite(websocket.TextMessage, []byte("start @minicap service"))
-		if err := service.Start("minicap"); err != nil && err != cmdctrl.ErrAlreadyRunning {
+		wsWrite(websocket.TextMessage, []byte("restart @minicap service"))
+		if err := service.Restart("minicap"); err != nil && err != cmdctrl.ErrAlreadyRunning {
 			wsWrite(websocket.TextMessage, []byte("@minicap service start failed: "+err.Error()))
 			return
 		}
-		defer service.Stop("minicap")
-		// TODO
+
 		wsWrite(websocket.TextMessage, []byte("dial unix:@minicap"))
 		log.Printf("minicap connection: %v", r.RemoteAddr)
 		dataC := make(chan []byte, 10)

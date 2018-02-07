@@ -5,8 +5,11 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"log"
+	"net/http"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -14,6 +17,7 @@ import (
 	"time"
 
 	"github.com/codeskyblue/procfs"
+	"github.com/franela/goreq"
 	shellquote "github.com/kballard/go-shellquote"
 	"github.com/shogo82148/androidbinary/apk"
 )
@@ -23,6 +27,11 @@ func TempFileName(dir, suffix string) string {
 	randBytes := make([]byte, 16)
 	rand.Read(randBytes)
 	return filepath.Join(dir, hex.EncodeToString(randBytes)+suffix)
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // Command add timeout support for os/exec
@@ -183,4 +192,29 @@ func mainActivityOf(packageName string) (activity string, err error) {
 		return pkg.MainAcitivty()
 	}
 	return "", errors.New("package not found")
+}
+
+// download minicap or minitouch apk, etc...
+func httpDownload(path string, urlStr string, perms os.FileMode) (written int64, err error) {
+	resp, err := goreq.Request{
+		Uri:             urlStr,
+		RedirectHeaders: true,
+		MaxRedirects:    10,
+	}.Do()
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		err = fmt.Errorf("http download <%s> status %v", urlStr, resp.Status)
+		return
+	}
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY, perms)
+	if err != nil {
+		return
+	}
+	defer file.Close()
+	written, err = io.Copy(file, resp.Body)
+	log.Println("http download:", written)
+	return
 }
