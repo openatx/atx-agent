@@ -2,7 +2,7 @@
 language: go
 sudo: false
 go:
-- 1.8
+- 1.10
 install:
 - go get github.com/shurcooL/vfsgen
 - go get -v -t

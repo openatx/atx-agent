@@ -1104,6 +1104,7 @@ func main() {
 		fmt.Println("Enter into daemon mode")
 		os.Unsetenv("IGNORE_SIGHUP")
 
+		os.Rename("/sdcard/atx-agent.log", "/sdcard/atx-agent.log.old")
 		f, err := os.Create("/sdcard/atx-agent.log")
 		if err != nil {
 			panic(err)
@@ -1185,7 +1186,7 @@ func main() {
 	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		for sig := range sigc {
-			log.Println(sig)
+			log.Println("receive signal", sig)
 			service.StopAll()
 			os.Exit(0)
 			httpServer.Shutdown(context.TODO())

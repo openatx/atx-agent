@@ -5,6 +5,15 @@ HTTP Server runs on android device
 
 运行再Android手机上的http服务器，旨在希望通过Wifi控制手机，完成手机的自动化功能。
 
+# Build
+需要Go版本 >= 1.10
+
+```bash
+$ go get -v
+$ go generate
+$ GOOS=linux GOARCH=arm go build -tags vfs
+```
+
 # Usage
 从<https://github.com/openatx/atx-agent/releases>下载以`linux_armv7.tar.gz`结尾的二进制包。绝大部分手机都是linux-arm架构的。
 
