@@ -156,6 +156,16 @@ $ curl 10.0.0.1:7912/upgrade
 $ curl "10.0.0.1:7912/upgrade?version=0.0.2"
 ```
 
+## 修复minicap, minitouch程序
+
+```bash
+# Fix minicap 
+$ curl -XPUT 10.0.0.1:7912/minicap
+
+# Fix minitouch
+$ curl -XPUT 10.0.0.1:7912/minitouch
+```
+
 ## 视频录制
 开始录制
 

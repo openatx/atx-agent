@@ -630,6 +630,8 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 			deviceRotation = rotation
 		}
 		updateMinicapRotation(deviceRotation)
+		// APK Service will send rotation to atx-agent when rotation changes
+		runShellTimeout(5*time.Second, "am", "startservice", "--user", "0", "-n", "com.github.uiautomator/.Service")
 		fmt.Fprintf(w, "rotation change to %d", deviceRotation)
 	})
 
@@ -763,6 +765,16 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		io.WriteString(w, "Unable to canceled")
 	}).Methods("DELETE")
 
+	// fix minitouch
+	m.HandleFunc("/minitouch", func(w http.ResponseWriter, r *http.Request) {
+		if err := installMinitouch(); err == nil {
+			log.Println("update minitouch success")
+			io.WriteString(w, "Update minitouch success")
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	}).Methods("PUT")
+
 	m.HandleFunc("/minitouch", singleFightNewerWebsocket(func(w http.ResponseWriter, r *http.Request, ws *websocket.Conn) {
 		defer ws.Close()
 		const wsWriteWait = 10 * time.Second
@@ -829,7 +841,17 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 				wsWrite(websocket.TextMessage, []byte("touch request buffer full"))
 			}
 		}
-	}))
+	})).Methods("GET")
+
+	// fix minicap
+	m.HandleFunc("/minicap", func(w http.ResponseWriter, r *http.Request) {
+		if err := installMinicap(); err == nil {
+			log.Println("update minicap success")
+			io.WriteString(w, "Update minicap success")
+		} else {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	}).Methods("PUT")
 
 	m.HandleFunc("/minicap", singleFightNewerWebsocket(func(w http.ResponseWriter, r *http.Request, ws *websocket.Conn) {
 		defer ws.Close()
@@ -906,7 +928,7 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		}
 		quitC <- true
 		log.Println("stream finished")
-	}))
+	})).Methods("GET")
 
 	// TODO(ssx): perfer to delete
 	// FIXME(ssx): screenrecord is not good enough, need to change later

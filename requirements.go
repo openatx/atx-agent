@@ -43,13 +43,13 @@ func installMinicap() error {
 		return nil
 	}
 	log.Println("install minicap")
-	if fileExists("/data/local/tmp/minicap") && fileExists("/data/local/tmp/minicap.so") {
-		if err := Screenshot("/dev/null"); err != nil {
-			log.Println("err:", err)
-		} else {
-			return nil
-		}
-	}
+	// if fileExists("/data/local/tmp/minicap") && fileExists("/data/local/tmp/minicap.so") {
+	// 	if err := Screenshot("/dev/null"); err != nil {
+	// 		log.Println("err:", err)
+	// 	} else {
+	// 		return nil
+	// 	}
+	// }
 	minicapSource := "https://github.com/codeskyblue/stf-binaries/raw/master/node_modules/minicap-prebuilt/prebuilt"
 	propOutput, err := runShell("getprop")
 	if err != nil {
@@ -80,4 +80,12 @@ func installMinicap() error {
 		return err
 	}
 	return nil
+}
+
+func installMinitouch() error {
+	baseURL := "https://github.com/codeskyblue/stf-binaries/raw/master/node_modules/minitouch-prebuilt/prebuilt"
+	abi := getProperty("ro.product.cpu.abi")
+	binURL := strings.Join([]string{baseURL, abi, "bin/minitouch"}, "/")
+	_, err := httpDownload("/data/local/tmp/minitouch", binURL, 0755)
+	return err
 }
