@@ -1062,7 +1062,9 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 
 	m.Handle("/assets/{(.*)}", http.StripPrefix("/assets", http.FileServer(Assets)))
 
-	var handler = cors.New(cors.Options{}).Handler(m)
+	var handler = cors.New(cors.Options{
+		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE"},
+	}).Handler(m)
 	httpServer = &http.Server{Handler: handler} // url(/stop) need it.
 	return httpServer.Serve(lis)
 }

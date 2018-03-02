@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 	"regexp"
 	"runtime"
 	"strings"
@@ -50,6 +51,10 @@ func installMinicap() error {
 	// 		return nil
 	// 	}
 	// }
+	// remove first to prevent "text file busy"
+	os.Remove("/data/local/tmp/minicap")
+	os.Remove("/data/local/tmp/minicap.so")
+
 	minicapSource := "https://github.com/codeskyblue/stf-binaries/raw/master/node_modules/minicap-prebuilt/prebuilt"
 	propOutput, err := runShell("getprop")
 	if err != nil {
