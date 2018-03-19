@@ -18,7 +18,7 @@ import (
 	"github.com/franela/goreq"
 )
 
-const defaultDownloadTimeout = 30 * time.Minute
+const defaultDownloadTimeout = 2 * time.Hour
 
 var background = &Background{
 	sm: syncmap.New(),

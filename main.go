@@ -1119,6 +1119,7 @@ func main() {
 		}
 	}
 
+	os.Setenv("TMPDIR", "/sdcard/")
 	if *fDaemon && os.Getenv("ATX_AGENT") == "" {
 		runDaemon()
 		return
