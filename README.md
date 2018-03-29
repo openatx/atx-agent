@@ -27,33 +27,6 @@ $ adb shell /data/local/tmp/atx-agent -d
 
 默认监听的端口是7912。
 
-# 重要更新历史
-- 0.0.8
-
-    * 支持连接Server获取最新版本，并自动升级
-
-- 0.0.7
-
-    * 响应服务端的websocket PING请求
-    * 如果安装失败，尝试先卸载，然后继续安装
-
-- 0.0.6
-
-    * 支持文件上传
-
-- 0.0.5
-
-    * 移除每次启动时自动安装minicap, com.github.uiautomator应用
-
-- 0.0.4
-
-    * 增加网页版的控制台
-    * 支持daemon模式运行
-
-- 0.0.3
-
-    * 增加安装应用支持
-
 # 常用接口
 假设手机的地址是$DEVICE_URL (eg: `http://10.0.0.1:7912`)
 
@@ -97,6 +70,15 @@ $ curl -X GET $DEVICE_URL/install/1
     "titalSize": 770571,
     "copiedSize": 770571,
     "message": "success installed"
+}
+```
+
+## Shell命令
+```bash
+$ curl -X POST -d command="pwd" $DEVICE_URL/shell
+{
+    "output": "/",
+    "error": null
 }
 ```
 
@@ -257,6 +239,38 @@ go get github.com/shurcooL/vfsgen
 go generate
 go build -tags vfs
 ```
+
+# 重要更新历史
+- ?.?.?
+
+    * 还是看git日志吧
+
+- 0.0.8
+
+    * 支持连接Server获取最新版本，并自动升级
+
+- 0.0.7
+
+    * 响应服务端的websocket PING请求
+    * 如果安装失败，尝试先卸载，然后继续安装
+
+- 0.0.6
+
+    * 支持文件上传
+
+- 0.0.5
+
+    * 移除每次启动时自动安装minicap, com.github.uiautomator应用
+
+- 0.0.4
+
+    * 增加网页版的控制台
+    * 支持daemon模式运行
+
+- 0.0.3
+
+    * 增加安装应用支持
+
 
 # LICENSE
 [MIT](LICENSE)
