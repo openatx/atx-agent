@@ -148,7 +148,7 @@ $ curl -XPUT 10.0.0.1:7912/minicap
 $ curl -XPUT 10.0.0.1:7912/minitouch
 ```
 
-## 视频录制
+## 视频录制(不推荐用)
 开始录制
 
 ```bash
@@ -217,6 +217,41 @@ Websocket连接 `$DEVICE_URL/minitouch`, 一行行的按照JSON的格式写入
     {"operation": "c"}
     {"operation": "u", "index": 0}
     {"operation": "c"}
+    ```
+
+## Whatsinput交互协议
+感谢 项目<https://github.com/willerce/WhatsInput>
+
+Websocket连接 `$DEVICE_URL/whatsinput`, 接收JSON格式
+
+### 手机 --> 前端
+- 设置文本框内容
+
+    ```json
+    {"text":"hello world", "type":"InputStart"}
+    ```
+
+    会自动清除原有的内容，替换为新的内容
+
+- 结束编辑
+
+    ```json
+    {"type": "InputFinish"}
+    ```
+
+- KeyCode的输入
+
+    ```json
+    {"type": "InputKey", "code": 66}
+    ```
+
+    [KeyCode参考列表](https://testerhome.com/topics/1386)
+
+### 前端 --> 手机
+- 编辑框内容变化
+
+    ```json
+    {"type": "InputChange", "text": "some text"}
     ```
 
 # TODO

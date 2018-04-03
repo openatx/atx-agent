@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"flag"
@@ -451,6 +452,9 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		renderHTML(w, "remote.html")
 	})
 
+	const whatsInputFinishedMagic = "inputFinished--201804031742"
+	var whatsInputChannel = make(chan string, 0)
+
 	// Send input to device
 	// Highly affected by project https://github.com/willerce/WhatsInput
 	// Also thanks to https://github.com/senzhk/ADBKeyBoard
@@ -460,14 +464,46 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 			Text string `json:"text,omitempty"`
 			Code int    `json:"code,omitempty"`
 		}
+		quit := make(chan bool, 1)
+		go func() {
+			for {
+				select {
+				case msg := <-whatsInputChannel:
+					log.Println("Receive msg", msg)
+				case <-quit:
+					return
+				}
+			}
+		}()
 		for {
 			if err := ws.ReadJSON(&v); err != nil {
+				quit <- true
 				log.Println(err)
 				break
 			}
 			log.Println(v.Type, v.Text, v.Code)
+			switch v.Type {
+			case "InputStart":
+				if v.Text == "" {
+					runShell("am", "broadcast", "-a", "ADB_CLEAR_TEXT")
+				} else {
+					base64Str := base64.StdEncoding.EncodeToString([]byte(v.Text))
+					runShell("am", "broadcast", "-a", "ADB_SET_TEXT", "--es", "text", base64Str)
+				}
+			case "InputKey":
+				runShell("input", "keyevent", "KEYCODE_ENTER") // HOTFIX(ssx): need fix later
+				// runShell("am", "broadcast", "-a", "ADB_INPUT_KEYCODE", "--ei", "code", strconv.Itoa(v.Code))
+			}
 		}
-	}))
+	})).Methods("GET")
+
+	m.HandleFunc("/whatsinput", func(w http.ResponseWriter, r *http.Request) {
+		data, _ := ioutil.ReadAll(r.Body)
+		select {
+		case whatsInputChannel <- string(data):
+		case <-time.After(1 * time.Second):
+		}
+	}).Methods("POST")
 
 	m.HandleFunc("/pidof/{pkgname}", func(w http.ResponseWriter, r *http.Request) {
 		pkgname := mux.Vars(r)["pkgname"]
