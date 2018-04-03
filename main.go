@@ -451,6 +451,24 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		renderHTML(w, "remote.html")
 	})
 
+	// Send input to device
+	// Highly affected by project https://github.com/willerce/WhatsInput
+	// Also thanks to https://github.com/senzhk/ADBKeyBoard
+	m.HandleFunc("/whatsinput", singleFightNewerWebsocket(func(w http.ResponseWriter, r *http.Request, ws *websocket.Conn) {
+		var v struct {
+			Type string `json:"type"`
+			Text string `json:"text,omitempty"`
+			Code int    `json:"code,omitempty"`
+		}
+		for {
+			if err := ws.ReadJSON(&v); err != nil {
+				log.Println(err)
+				break
+			}
+			log.Println(v.Type, v.Text, v.Code)
+		}
+	}))
+
 	m.HandleFunc("/pidof/{pkgname}", func(w http.ResponseWriter, r *http.Request) {
 		pkgname := mux.Vars(r)["pkgname"]
 		if pid, err := pidOf(pkgname); err == nil {
@@ -603,11 +621,23 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		http.ServeFile(w, r, filepath)
 	})
 
+	// keep ApkService always running
+	// if no activity in 5min, then restart apk service
+	const apkServiceTimeout = 5 * time.Minute
+	apkServiceTimer := time.NewTimer(apkServiceTimeout)
+	go func() {
+		for range apkServiceTimer.C {
+			log.Println("startservice com.github.uiautomator/.Service")
+			runShell("am", "startservice", "-n", "com.github.uiautomator/.Service")
+			apkServiceTimer.Reset(apkServiceTimeout)
+		}
+	}()
+
 	m.HandleFunc("/info/battery", func(w http.ResponseWriter, r *http.Request) {
+		apkServiceTimer.Reset(apkServiceTimeout)
 		devInfo := getDeviceInfo()
 		devInfo.Battery.Update()
 		if err := tunnel.UpdateInfo(devInfo); err != nil {
-			// log.Printf("update info err: %v", err)
 			io.WriteString(w, "Failure "+err.Error())
 			return
 		}
@@ -615,6 +645,7 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 	}).Methods("POST")
 
 	m.HandleFunc("/info/rotation", func(w http.ResponseWriter, r *http.Request) {
+		apkServiceTimer.Reset(apkServiceTimeout)
 		var direction int                                 // 0,1,2,3
 		err := json.NewDecoder(r.Body).Decode(&direction) // TODO: auto get rotation
 		if err == nil {
