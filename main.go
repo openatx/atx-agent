@@ -452,8 +452,13 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		renderHTML(w, "remote.html")
 	})
 
-	const whatsInputFinishedMagic = "inputFinished--201804031742"
-	var whatsInputChannel = make(chan string, 0)
+	/* WhatsInput */
+	var whatsinput = struct {
+		C      chan string
+		Recent string
+	}{make(chan string, 0), ""}
+
+	const whatsInputFinishedMagic = "__inputFinished__"
 
 	// Send input to device
 	// Highly affected by project https://github.com/willerce/WhatsInput
@@ -468,8 +473,19 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		go func() {
 			for {
 				select {
-				case msg := <-whatsInputChannel:
+				case msg := <-whatsinput.C:
 					log.Println("Receive msg", msg)
+					if msg == whatsInputFinishedMagic {
+						log.Println("FinishedInput")
+						ws.WriteJSON(map[string]string{
+							"type": "InputFinish",
+						})
+					} else {
+						ws.WriteJSON(map[string]string{
+							"type": "InputStart",
+							"text": msg,
+						})
+					}
 				case <-quit:
 					return
 				}
@@ -481,15 +497,10 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 				log.Println(err)
 				break
 			}
-			log.Println(v.Type, v.Text, v.Code)
 			switch v.Type {
-			case "InputStart":
-				if v.Text == "" {
-					runShell("am", "broadcast", "-a", "ADB_CLEAR_TEXT")
-				} else {
-					base64Str := base64.StdEncoding.EncodeToString([]byte(v.Text))
-					runShell("am", "broadcast", "-a", "ADB_SET_TEXT", "--es", "text", base64Str)
-				}
+			case "InputChange":
+				base64Str := base64.StdEncoding.EncodeToString([]byte(v.Text))
+				runShell("am", "broadcast", "-a", "ADB_SET_TEXT", "--es", "text", strconv.Quote(base64Str))
 			case "InputKey":
 				runShell("input", "keyevent", "KEYCODE_ENTER") // HOTFIX(ssx): need fix later
 				// runShell("am", "broadcast", "-a", "ADB_INPUT_KEYCODE", "--ei", "code", strconv.Itoa(v.Code))
@@ -499,9 +510,23 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 
 	m.HandleFunc("/whatsinput", func(w http.ResponseWriter, r *http.Request) {
 		data, _ := ioutil.ReadAll(r.Body)
+		if string(data) == "" {
+			http.Error(w, "Empty body", http.StatusForbidden)
+			return
+		}
+		var input string
+		if data[0] == 'I' {
+			input = string(data[1:])
+			whatsinput.Recent = input
+		} else {
+			input = whatsInputFinishedMagic
+			whatsinput.Recent = ""
+		}
 		select {
-		case whatsInputChannel <- string(data):
-		case <-time.After(1 * time.Second):
+		case whatsinput.C <- input:
+			io.WriteString(w, "Success")
+		case <-time.After(100 * time.Millisecond):
+			io.WriteString(w, "No WebSocket client connected")
 		}
 	}).Methods("POST")
 

@@ -231,7 +231,7 @@ Websocket连接 `$DEVICE_URL/whatsinput`, 接收JSON格式
     {"text":"hello world", "type":"InputStart"}
     ```
 
-    会自动清除原有的内容，替换为新的内容
+    开始编辑时的内容
 
 - 结束编辑
 
@@ -239,6 +239,7 @@ Websocket连接 `$DEVICE_URL/whatsinput`, 接收JSON格式
     {"type": "InputFinish"}
     ```
 
+### 前端 --> 手机
 - KeyCode的输入
 
     ```json
@@ -247,8 +248,7 @@ Websocket连接 `$DEVICE_URL/whatsinput`, 接收JSON格式
 
     [KeyCode参考列表](https://testerhome.com/topics/1386)
 
-### 前端 --> 手机
-- 编辑框内容变化
+- 编辑框内容输入
 
     ```json
     {"type": "InputChange", "text": "some text"}
