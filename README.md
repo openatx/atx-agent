@@ -251,7 +251,7 @@ Websocket连接 `$DEVICE_URL/whatsinput`, 接收JSON格式
 - 编辑框内容输入
 
     ```json
-    {"type": "InputChange", "text": "some text"}
+    {"type": "InputEdit", "text": "some text"}
     ```
 
 # TODO

@@ -230,7 +230,7 @@ func installAPKForce(path string, packageName string) error {
 	return installAPK(path)
 }
 
-func Screenshot(filename string) (err error) {
+func Screenshot(filename string, thumbnailSize string) (err error) {
 	output, err := runShellOutput("LD_LIBRARY_PATH=/data/local/tmp", "/data/local/tmp/minicap", "-i")
 	if err != nil {
 		return
@@ -240,10 +240,13 @@ func Screenshot(filename string) (err error) {
 		err = fmt.Errorf("minicap not supported: %v", er)
 		return
 	}
+	if thumbnailSize == "" {
+		thumbnailSize = fmt.Sprintf("%dx%d", f.Width, f.Height)
+	}
 	if _, err = runShell(
 		"LD_LIBRARY_PATH=/data/local/tmp",
 		"/data/local/tmp/minicap",
-		"-P", fmt.Sprintf("%dx%d@%dx%d/%d", f.Width, f.Height, f.Width, f.Height, f.Rotation),
+		"-P", fmt.Sprintf("%dx%d@%s/%d", f.Width, f.Height, thumbnailSize, f.Rotation),
 		"-s", ">"+filename); err != nil {
 		return
 	}
@@ -454,11 +457,49 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 
 	/* WhatsInput */
 	var whatsinput = struct {
-		C      chan string
-		Recent string
-	}{make(chan string, 0), ""}
+		ChangeC  chan string
+		EditC    chan string
+		KeyCodeC chan int
+		Recent   string
+	}{make(chan string, 0), make(chan string, 0), make(chan int, 0), ""}
 
 	const whatsInputFinishedMagic = "__inputFinished__"
+
+	// simple pubsub system
+	m.HandleFunc("/whatsinput", func(w http.ResponseWriter, r *http.Request) {
+		host := r.Header.Get("Host")
+		log.Println("CONNECT", host)
+		conn, err := hijackHTTPRequest(w)
+		if err != nil {
+			log.Println("Hijack failed:", err)
+			return
+		}
+		quit := make(chan bool, 1)
+		go func() {
+			for {
+				select {
+				case text := <-whatsinput.EditC:
+					base64Str := base64.StdEncoding.EncodeToString([]byte(text)) + "\n"
+					conn.Write([]byte("I" + base64Str))
+				case keyCode := <-whatsinput.KeyCodeC:
+					conn.Write([]byte("K" + strconv.Itoa(keyCode)))
+				case <-time.After(10 * time.Second):
+					conn.Write([]byte("P")) // ping message
+				case <-quit:
+					return
+				}
+			}
+		}()
+
+		buf := make([]byte, 4096)
+		for {
+			_, err := conn.Read(buf)
+			if err != nil {
+				quit <- true
+				break
+			}
+		}
+	}).Methods("CONNECT")
 
 	// Send input to device
 	// Highly affected by project https://github.com/willerce/WhatsInput
@@ -473,7 +514,7 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		go func() {
 			for {
 				select {
-				case msg := <-whatsinput.C:
+				case msg := <-whatsinput.ChangeC:
 					log.Println("Receive msg", msg)
 					if msg == whatsInputFinishedMagic {
 						log.Println("FinishedInput")
@@ -498,9 +539,13 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 				break
 			}
 			switch v.Type {
-			case "InputChange":
-				base64Str := base64.StdEncoding.EncodeToString([]byte(v.Text))
-				runShell("am", "broadcast", "-a", "ADB_SET_TEXT", "--es", "text", strconv.Quote(base64Str))
+			case "InputEdit":
+				select {
+				case whatsinput.EditC <- v.Text:
+					log.Println("Message sended", v.Text)
+				case <-time.After(100 * time.Millisecond):
+				}
+				// runShell("am", "broadcast", "-a", "ADB_SET_TEXT", "--es", "text", strconv.Quote(base64Str))
 			case "InputKey":
 				runShell("input", "keyevent", "KEYCODE_ENTER") // HOTFIX(ssx): need fix later
 				// runShell("am", "broadcast", "-a", "ADB_INPUT_KEYCODE", "--ei", "code", strconv.Itoa(v.Code))
@@ -523,7 +568,7 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 			whatsinput.Recent = ""
 		}
 		select {
-		case whatsinput.C <- input:
+		case whatsinput.ChangeC <- input:
 			io.WriteString(w, "Success")
 		case <-time.After(100 * time.Millisecond):
 			io.WriteString(w, "No WebSocket client connected")
@@ -1127,13 +1172,22 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		json.NewEncoder(w).Encode(info)
 	})
 
-	screenshotFilename := "/data/local/tmp/minicap-screenshot.jpg"
-	if username := currentUserName(); username != "" {
-		screenshotFilename = "/data/local/tmp/minicap-screenshot-" + username + ".jpg"
+	screenshotIndex := -1
+	nextScreenshotFilename := func() string {
+		targetFolder := "/data/local/tmp/minicap-images"
+		if _, err := os.Stat(targetFolder); err != nil {
+			os.MkdirAll(targetFolder, 0755)
+		}
+		screenshotIndex = (screenshotIndex + 1) % 5
+		return filepath.Join(targetFolder, fmt.Sprintf("%d.jpg", screenshotIndex))
 	}
 
 	m.HandleFunc("/screenshot", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/screenshot/0", 302)
+		targetURL := "/screenshot/0"
+		if r.URL.RawQuery != "" {
+			targetURL += "?" + r.URL.RawQuery
+		}
+		http.Redirect(w, r, targetURL, 302)
 	}).Methods("GET")
 
 	m.Handle("/jsonrpc/0", uiautomatorProxy)
@@ -1143,12 +1197,14 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 			uiautomatorProxy.ServeHTTP(w, r)
 			return
 		}
-		if err := Screenshot(screenshotFilename); err != nil {
+		thumbnailSize := r.FormValue("thumbnail")
+		filename := nextScreenshotFilename()
+		if err := Screenshot(filename, thumbnailSize); err != nil {
 			log.Printf("screenshot[minicap] error: %v", err)
 			uiautomatorProxy.ServeHTTP(w, r)
 		} else {
 			w.Header().Set("X-Screenshot-Method", "minicap")
-			http.ServeFile(w, r, screenshotFilename)
+			http.ServeFile(w, r, filename)
 		}
 	})
 
@@ -1294,9 +1350,13 @@ func main() {
 		}
 	}
 
-	tunnel := &TunnelProxy{ServerAddr: *fTunnelServer}
+	tunnel := &TunnelProxy{
+		ServerAddr: *fTunnelServer,
+		Secret:     "hello kitty",
+	}
 	if *fTunnelServer != "" {
-		go tunnel.RunForever()
+		// go tunnel.RunForever()
+		go tunnel.Heratbeat()
 	}
 
 	sigc := make(chan os.Signal, 1)

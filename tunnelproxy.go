@@ -1,15 +1,16 @@
 package main
 
 import (
-	"errors"
+	"fmt"
 	"log"
+	"math"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/codeskyblue/heartbeat"
 	"github.com/franela/goreq"
-	"github.com/gorilla/websocket"
 	"github.com/openatx/androidutils"
 	"github.com/openatx/atx-server/proto"
 )
@@ -37,8 +38,11 @@ func getDeviceInfo() *proto.DeviceInfo {
 		if err != nil {
 			log.Println("get memory error:", err)
 		} else {
+			total := memory["MemTotal"]
+			around := int(math.Ceil(float64(total-512*1024) / 1024.0 / 1024.0)) // around GB
 			devInfo.Memory = &proto.MemoryInfo{
-				Total: memory["MemTotal"],
+				Total:  total,
+				Around: fmt.Sprintf("%d GB", around),
 			}
 		}
 
@@ -67,83 +71,39 @@ type versionResponse struct {
 
 type TunnelProxy struct {
 	ServerAddr string
-	connected  bool
-	udid       string
+	Secret     string
+
+	udid string
 }
 
-func (this *TunnelProxy) RunForever() {
-	var t time.Time
-	downCount := 0
-	for {
-		t = time.Now()
-		this.run()
-		// unsafeRunTunnelProxy(serverAddr)
-		if time.Since(t) > time.Minute {
-			downCount = 0
-			// n = 0
+// Need test. Connect with server use github.com/codeskyblue/heartbeat
+func (t *TunnelProxy) Heratbeat() {
+	dinfo := getDeviceInfo()
+	t.udid = dinfo.Udid
+	client := &heartbeat.Client{
+		Secret:     t.Secret,
+		ServerAddr: "http://" + t.ServerAddr + "/heartbeat",
+		Identifier: t.udid,
+	}
+	lostCnt := 0
+	client.OnConnect = func() {
+		lostCnt = 0
+		t.checkUpdate()
+		// send device info on first connect
+		dinfo.Battery.Update()
+		if err := t.UpdateInfo(dinfo); err != nil {
+			log.Println("Update info:", err)
 		}
-		if downCount == 0 { // only do on the first disconnect
-			// open identify when disconnected to force WIFI reconnected
+	}
+	client.OnError = func(err error) {
+		if lostCnt == 0 {
+			// open identify to make WIFI reconnected when disconnected
 			runShellTimeout(time.Minute, "am", "start", "-n", "com.github.uiautomator/.IdentifyActivity")
 		}
-
-		// idle
-		downCount++
-		if downCount > 5 {
-			downCount = 5
-		}
-		log.Printf("dial server error, reconnect after %d seconds", downCount*5)
-		time.Sleep(time.Duration(downCount) * 5 * time.Second) // 5, 10, ... 50s
+		lostCnt++
 	}
-}
-
-func (t *TunnelProxy) run() (err error) {
-	// check version update
-	if err = t.checkUpdate(); err != nil {
-		return err
-	}
-	// keep connection with server
-	ws, _, err := websocket.DefaultDialer.Dial("ws://"+t.ServerAddr+"/echo", nil)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		ws.Close()
-		t.connected = false
-	}()
-	log.Printf("server connected")
-
-	// when network switch, connection still exists, but no ping comes
-	const wsReadWait = 60 * time.Second
-	const wsWriteWait = 60 * time.Second
-
-	devInfo := getDeviceInfo()
-	t.udid = devInfo.Udid
-
-	ws.SetWriteDeadline(time.Now().Add(wsWriteWait))
-	ws.WriteJSON(proto.CommonMessage{
-		Type: proto.DeviceInfoMessage,
-		Data: devInfo,
-	})
-
-	// server ping interval now is 10s
-	log.Println("set ping handler and read/write deadline")
-	ws.SetReadDeadline(time.Now().Add(wsReadWait))
-	ws.SetPingHandler(func(string) error {
-		ws.SetReadDeadline(time.Now().Add(wsReadWait))
-		// set write deadline on each write to prevent network issue
-		ws.SetWriteDeadline(time.Now().Add(wsWriteWait))
-		ws.WriteMessage(websocket.PongMessage, []byte{})
-		return nil
-	})
-
-	t.connected = true // set connected status
-	for {
-		_, _, err := ws.ReadMessage()
-		if err != nil {
-			return err
-		}
-	}
+	// send heartbeat to server every 10s
+	client.Beat(10 * time.Second)
 }
 
 func (t *TunnelProxy) checkUpdate() error {
@@ -173,11 +133,7 @@ func (t *TunnelProxy) checkUpdate() error {
 	return nil
 }
 
-// return if successfully updated
 func (t *TunnelProxy) UpdateInfo(devInfo *proto.DeviceInfo) error {
-	if !t.connected {
-		return errors.New("tunnel is not established")
-	}
 	res, err := goreq.Request{
 		Method: "POST",
 		Uri:    "http://" + t.ServerAddr + "/devices/" + t.udid + "/info",

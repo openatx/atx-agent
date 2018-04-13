@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
@@ -8,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -217,4 +219,41 @@ func httpDownload(path string, urlStr string, perms os.FileMode) (written int64,
 	written, err = io.Copy(file, resp.Body)
 	log.Println("http download:", written)
 	return
+}
+
+func hijackHTTPRequest(w http.ResponseWriter) (conn net.Conn, err error) {
+	hj, ok := w.(http.Hijacker)
+	if !ok {
+		err = errors.New("webserver don't support hijacking")
+		return
+	}
+
+	hjconn, bufrw, err := hj.Hijack()
+	if err != nil {
+		return nil, err
+	}
+	conn = newHijackReadWriteCloser(hjconn.(*net.TCPConn), bufrw)
+	return
+}
+
+type hijactRW struct {
+	*net.TCPConn
+	bufrw *bufio.ReadWriter
+}
+
+func (this *hijactRW) Write(data []byte) (int, error) {
+	nn, err := this.bufrw.Write(data)
+	this.bufrw.Flush()
+	return nn, err
+}
+
+func (this *hijactRW) Read(p []byte) (int, error) {
+	return this.bufrw.Read(p)
+}
+
+func newHijackReadWriteCloser(conn *net.TCPConn, bufrw *bufio.ReadWriter) net.Conn {
+	return &hijactRW{
+		bufrw:   bufrw,
+		TCPConn: conn,
+	}
 }
