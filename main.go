@@ -1248,6 +1248,15 @@ func main() {
 		return
 	}
 
+	defer func() {
+		if e := recover(); e != nil {
+			log.Println("Detect panic !!!", e)
+			ioutil.WriteFile("/sdcard/atx-panic.txt", []byte(fmt.Sprintf(
+				"Time: %s\n%v", time.Now().Format("2006-01-02 15:04:05"),
+				e)), 0644)
+		}
+	}()
+
 	if *fStop {
 		_, err := http.Get("http://127.0.0.1:7912/stop")
 		if err != nil {
