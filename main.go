@@ -149,8 +149,6 @@ type MinicapInfo struct {
 }
 
 var (
-	propOnce              sync.Once
-	properties            map[string]string
 	deviceRotation        int
 	displayMaxWidthHeight = 800
 )
@@ -160,18 +158,6 @@ func updateMinicapRotation(rotation int) {
 	width, height := devInfo.Display.Width, devInfo.Display.Height
 	service.UpdateArgs("minicap", "/data/local/tmp/minicap", "-S", "-P",
 		fmt.Sprintf("%dx%d@%dx%d/%d", width, height, displayMaxWidthHeight, displayMaxWidthHeight, rotation))
-}
-
-func getProperty(name string) string {
-	propOnce.Do(func() {
-		var err error
-		properties, err = androidutils.Properties()
-		if err != nil {
-			log.Println("getProperty err:", err)
-			properties = make(map[string]string)
-		}
-	})
-	return properties[name]
 }
 
 const (
@@ -195,7 +181,7 @@ func installAPK(path string) error {
 	// -g: grant all runtime permissions
 	// -d: allow version code downgrade
 	// -r: replace existing application
-	sdk, _ := strconv.Atoi(getProperty("ro.build.version.sdk"))
+	sdk, _ := strconv.Atoi(getCachedProperty("ro.build.version.sdk"))
 	cmds := []string{"pm", "install", "-d", "-r", path}
 	if sdk >= 23 { // android 6.0
 		cmds = []string{"pm", "install", "-d", "-r", "-g", path}
@@ -1193,7 +1179,7 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 	m.Handle("/jsonrpc/0", uiautomatorProxy)
 	m.Handle("/ping", uiautomatorProxy)
 	m.HandleFunc("/screenshot/0", func(w http.ResponseWriter, r *http.Request) {
-		if r.FormValue("minicap") == "false" || strings.ToLower(getProperty("ro.product.manufacturer")) == "meizu" {
+		if r.FormValue("minicap") == "false" || strings.ToLower(getCachedProperty("ro.product.manufacturer")) == "meizu" {
 			uiautomatorProxy.ServeHTTP(w, r)
 			return
 		}

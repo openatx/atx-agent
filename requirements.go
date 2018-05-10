@@ -89,7 +89,7 @@ func installMinicap() error {
 
 func installMinitouch() error {
 	baseURL := "https://github.com/codeskyblue/stf-binaries/raw/master/node_modules/minitouch-prebuilt/prebuilt"
-	abi := getProperty("ro.product.cpu.abi")
+	abi := getCachedProperty("ro.product.cpu.abi")
 	binURL := strings.Join([]string{baseURL, abi, "bin/minitouch"}, "/")
 	_, err := httpDownload("/data/local/tmp/minitouch", binURL, 0755)
 	return err

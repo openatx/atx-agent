@@ -20,13 +20,13 @@ var currentDeviceInfo *proto.DeviceInfo
 func getDeviceInfo() *proto.DeviceInfo {
 	if currentDeviceInfo == nil {
 		devInfo := &proto.DeviceInfo{
-			Serial:       getProperty("ro.serialno"),
-			Brand:        getProperty("ro.product.brand"),
-			Model:        getProperty("ro.product.model"),
-			Version:      getProperty("ro.build.version.release"),
+			Serial:       getCachedProperty("ro.serialno"),
+			Brand:        getCachedProperty("ro.product.brand"),
+			Model:        getCachedProperty("ro.product.model"),
+			Version:      getCachedProperty("ro.build.version.release"),
 			AgentVersion: version,
 		}
-		devInfo.Sdk, _ = strconv.Atoi(getProperty("ro.build.version.sdk"))
+		devInfo.Sdk, _ = strconv.Atoi(getCachedProperty("ro.build.version.sdk"))
 		devInfo.HWAddr, _ = androidutils.HWAddrWLAN()
 		display, _ := androidutils.WindowSize()
 		devInfo.Display = &display
@@ -57,7 +57,10 @@ func getDeviceInfo() *proto.DeviceInfo {
 		}
 
 		// Udid is ${Serial}-${MacAddress}-${model}
-		udid := getProperty("ro.serialno") + "-" + devInfo.HWAddr + "-" + strings.Replace(getProperty("ro.product.model"), " ", "_", -1)
+		udid := fmt.Sprintf("%s-%s-%s",
+			getCachedProperty("ro.serialno"),
+			devInfo.HWAddr,
+			strings.Replace(getCachedProperty("ro.product.model"), " ", "_", -1))
 		devInfo.Udid = udid
 		currentDeviceInfo = devInfo
 	}

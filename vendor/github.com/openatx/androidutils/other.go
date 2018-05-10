@@ -17,7 +17,7 @@ func HWAddrWLAN() (string, error) {
 // Thanks to this article https://android.stackexchange.com/questions/142606/how-can-i-find-my-mac-address/142630#142630
 func getHWAddrWLAN() (string, error) {
 	// method 1
-	if macaddr := GetProperty("ro.boot.wifimacaddr"); macaddr != "" {
+	if macaddr := CachedProperty("ro.boot.wifimacaddr"); macaddr != "" {
 		return macaddr, nil
 	}
 	// method 2
