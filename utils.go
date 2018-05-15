@@ -21,6 +21,7 @@ import (
 	"github.com/codeskyblue/procfs"
 	"github.com/franela/goreq"
 	shellquote "github.com/kballard/go-shellquote"
+	"github.com/openatx/androidutils"
 	"github.com/shogo82148/androidbinary/apk"
 )
 
@@ -256,4 +257,12 @@ func newHijackReadWriteCloser(conn *net.TCPConn, bufrw *bufio.ReadWriter) net.Co
 		bufrw:   bufrw,
 		TCPConn: conn,
 	}
+}
+
+func getCachedProperty(name string) string {
+	return androidutils.CachedProperty(name)
+}
+
+func getProperty(name string) string {
+	return androidutils.Property(name)
 }

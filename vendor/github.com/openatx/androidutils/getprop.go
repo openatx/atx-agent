@@ -5,6 +5,7 @@ import (
 	"log"
 	"os/exec"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -48,9 +49,8 @@ var (
 	ErrGetprop = errors.New("error call getprop")
 )
 
-// Return property by name
-// if something went wrong, return ""
-func GetProperty(name string) string {
+// Return property by name from cache
+func CachedProperty(name string) string {
 	propOnce.Do(func() {
 		var err error
 		properties, err = Properties()
@@ -59,4 +59,13 @@ func GetProperty(name string) string {
 		}
 	})
 	return properties[name]
+}
+
+// Return property by name
+func Property(name string) string {
+	propOutput, err := runShell("getprop", name)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(propOutput)
 }

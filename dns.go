@@ -22,11 +22,17 @@ var (
 )
 
 func dnsLookupHost(hostname string) (ip net.IP, err error) {
-	dnsServer := getProperty("net.dns1")
-	if dnsServer == "" {
-		dnsServer = "8.8.8.8"
+	for _, dnsServer := range []string{"114.114.114.114", "8.8.4.4"} {
+		ip, err = dnsLookupHostWithDNS(hostname, dnsServer)
+		if err == nil {
+			return
+		}
 	}
-	return dnsLookupHostWithDNS(hostname, dnsServer)
+	defaultDNSResolver := getProperty("net.dns1")
+	if defaultDNSResolver == "" {
+		return
+	}
+	return dnsLookupHostWithDNS(hostname, defaultDNSResolver)
 }
 
 func dnsLookupHostWithDNS(hostname string, dnsServer string) (ip net.IP, err error) {
@@ -49,7 +55,7 @@ func dnsLookupHostWithDNS(hostname string, dnsServer string) (ip net.IP, err err
 	if len(in.Answer) == 0 {
 		return nil, errors.New("dns return empty answer")
 	}
-	log.Println(in.Answer[0])
+	log.Println("dns:"+dnsServer, in.Answer[0])
 	if t, ok := in.Answer[0].(*dns.A); ok {
 		return t.A, nil
 	}
