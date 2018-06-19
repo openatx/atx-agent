@@ -605,6 +605,10 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 			http.Error(w, err.Error(), http.StatusGone) // 410
 			return
 		}
+		if !strings.HasPrefix(mainActivity, packageName) {
+			mainActivity = "." + mainActivity
+		}
+
 		flags := r.FormValue("flags")
 		if flags == "" {
 			flags = "-W -S" // W: wait launched, S: stop before started
