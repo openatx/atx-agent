@@ -243,16 +243,16 @@
 			"revisionTime": "2018-03-22T22:00:05Z"
 		},
 		{
-			"checksumSHA1": "N4IvuMzpvlExvTDNBy5Va6plsho=",
+			"checksumSHA1": "prASThxFUGWu8eWUsEjWuTLHJK0=",
 			"path": "github.com/shogo82148/androidbinary",
-			"revision": "f2570763f91ec28d97aa329a78bfb2b93eb41822",
-			"revisionTime": "2017-11-25T03:40:40Z"
+			"revision": "35135bc129e0f91d783d6fdd2e3f4c56b8db1735",
+			"revisionTime": "2018-06-21T01:04:41Z"
 		},
 		{
-			"checksumSHA1": "WgYPLxca0ga12PMrHTbKYO790ys=",
+			"checksumSHA1": "/Hpx1mK8G3eD35ZhGIqqxuvR888=",
 			"path": "github.com/shogo82148/androidbinary/apk",
-			"revision": "f2570763f91ec28d97aa329a78bfb2b93eb41822",
-			"revisionTime": "2017-11-25T03:40:40Z"
+			"revision": "35135bc129e0f91d783d6fdd2e3f4c56b8db1735",
+			"revisionTime": "2018-06-21T01:04:41Z"
 		},
 		{
 			"checksumSHA1": "lDtxf6bM3YtOIVrm+FrWnlgfCKA=",
