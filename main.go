@@ -605,7 +605,12 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 			http.Error(w, err.Error(), http.StatusGone) // 410
 			return
 		}
-		if !strings.HasPrefix(mainActivity, packageName) {
+		// Refs: https://stackoverflow.com/questions/12131555/leading-dot-in-androidname-really-required
+		// MainActivity convert to .MainActivity
+		// com.example.app.MainActivity keep same
+		// app.MainActivity keep same
+		// So only words not contains dot, need to add prefix "."
+		if !strings.Contains(mainActivity, ".") {
 			mainActivity = "." + mainActivity
 		}
 
