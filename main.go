@@ -133,6 +133,35 @@ func mustGetOoutboundIP() net.IP {
 	return ip
 }
 
+func renderJSON(w http.ResponseWriter, data interface{}) {
+	js, err := json.Marshal(data)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=UTF-8")
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(js)))
+	w.Write(js)
+}
+
+func cmdError2Code(err error) int {
+	if err == nil {
+		return 0
+	}
+	if exiterr, ok := err.(*exec.ExitError); ok {
+		// The program has exited with an exit code != 0
+
+		// This works on both Unix and Windows. Although package
+		// syscall is generally platform dependent, WaitStatus is
+		// defined for both Unix and Windows and in both cases has
+		// an ExitStatus() method with the same signature.
+		if status, ok := exiterr.Sys().(syscall.WaitStatus); ok {
+			return status.ExitStatus()
+		}
+	}
+	return 128
+}
+
 func GoFunc(f func() error) chan error {
 	ch := make(chan error)
 	go func() {
@@ -576,6 +605,15 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 			http.Error(w, err.Error(), http.StatusGone) // 410
 			return
 		}
+		// Refs: https://stackoverflow.com/questions/12131555/leading-dot-in-androidname-really-required
+		// MainActivity convert to .MainActivity
+		// com.example.app.MainActivity keep same
+		// app.MainActivity keep same
+		// So only words not contains dot, need to add prefix "."
+		if !strings.Contains(mainActivity, ".") {
+			mainActivity = "." + mainActivity
+		}
+
 		flags := r.FormValue("flags")
 		if flags == "" {
 			flags = "-W -S" // W: wait launched, S: stop before started
@@ -627,16 +665,26 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		if command == "" {
 			command = r.FormValue("c")
 		}
+		timeoutSeconds := r.FormValue("timeout")
+		if timeoutSeconds == "" {
+			timeoutSeconds = "60"
+		}
+		seconds, err := strconv.Atoi(timeoutSeconds)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		c := Command{
 			Args:    []string{command},
 			Shell:   true,
-			Timeout: 1 * time.Minute,
+			Timeout: time.Duration(seconds) * time.Second,
 		}
-		output, err := c.Output()
-		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"output": string(output),
-			"error":  err,
+		output, err := c.CombinedOutput()
+		exitCode := cmdError2Code(err)
+		renderJSON(w, map[string]interface{}{
+			"output":   string(output),
+			"exitCode": exitCode,
+			"error":    err,
 		})
 	}).Methods("GET", "POST")
 
