@@ -43,6 +43,7 @@ import (
 )
 
 var (
+	expath, _   = GetExDir()
 	service     = cmdctrl.New()
 	downManager = newDownloadManager()
 	upgrader    = websocket.Upgrader{
@@ -170,6 +171,17 @@ func GoFunc(f func() error) chan error {
 	return ch
 }
 
+// Get executable directory based on current running binary
+func GetExDir() (dir string, err error) {
+	ex, err := os.Executable()
+	if err != nil {
+		log.Println("Failed to get executable directory.")
+		return "", err
+	}
+	dir = filepath.Dir(ex)
+	return dir, err
+}
+
 type MinicapInfo struct {
 	Width    int     `json:"width"`
 	Height   int     `json:"height"`
@@ -185,7 +197,8 @@ var (
 func updateMinicapRotation(rotation int) {
 	devInfo := getDeviceInfo()
 	width, height := devInfo.Display.Width, devInfo.Display.Height
-	service.UpdateArgs("minicap", "/data/local/tmp/minicap", "-S", "-P",
+	minicapbin := fmt.Sprintf("%v/%v", expath, "minicap")
+	service.UpdateArgs("minicap", minicapbin, "-S", "-P",
 		fmt.Sprintf("%dx%d@%dx%d/%d", width, height, displayMaxWidthHeight, displayMaxWidthHeight, rotation))
 }
 
@@ -246,7 +259,9 @@ func installAPKForce(path string, packageName string) error {
 }
 
 func Screenshot(filename string, thumbnailSize string) (err error) {
-	output, err := runShellOutput("LD_LIBRARY_PATH=/data/local/tmp", "/data/local/tmp/minicap", "-i")
+	ldlibrarypath := fmt.Sprintf("LD_LIBRARY_PATH=%v", expath)
+	minicapbin := fmt.Sprintf("%v/%v", expath, "minicap")
+	output, err := runShellOutput(ldlibrarypath, minicapbin, "-i")
 	if err != nil {
 		return
 	}
@@ -259,8 +274,8 @@ func Screenshot(filename string, thumbnailSize string) (err error) {
 		thumbnailSize = fmt.Sprintf("%dx%d", f.Width, f.Height)
 	}
 	if _, err = runShell(
-		"LD_LIBRARY_PATH=/data/local/tmp",
-		"/data/local/tmp/minicap",
+		ldlibrarypath,
+		minicapbin,
 		"-P", fmt.Sprintf("%dx%d@%s/%d", f.Width, f.Height, thumbnailSize, f.Rotation),
 		"-s", ">"+filename); err != nil {
 		return
@@ -1208,7 +1223,7 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 
 	screenshotIndex := -1
 	nextScreenshotFilename := func() string {
-		targetFolder := "/data/local/tmp/minicap-images"
+		targetFolder := fmt.Sprintf("%v/minicap-images", expath)
 		if _, err := os.Stat(targetFolder); err != nil {
 			os.MkdirAll(targetFolder, 0755)
 		}
@@ -1276,6 +1291,10 @@ func main() {
 	fTunnelServer := flag.String("t", "", "tunnel server address")
 	fNoUiautomator := flag.Bool("nouia", false, "not start uiautomator")
 	flag.Parse()
+
+	ldlibrarypath := fmt.Sprintf("LD_LIBRARY_PATH=%v", expath)
+	minicapbin := fmt.Sprintf("%v/%v", expath, "minicap")
+	minitouchbin := fmt.Sprintf("%v/%v", expath, "minitouch")
 
 	if *fVersion {
 		fmt.Println(version)
@@ -1365,12 +1384,12 @@ func main() {
 	devInfo := getDeviceInfo()
 	width, height := devInfo.Display.Width, devInfo.Display.Height
 	service.Add("minicap", cmdctrl.CommandInfo{
-		Environ: []string{"LD_LIBRARY_PATH=/data/local/tmp"},
-		Args: []string{"/data/local/tmp/minicap", "-S", "-P",
+		Environ: []string{ldlibrarypath},
+		Args: []string{minicapbin, "-S", "-P",
 			fmt.Sprintf("%dx%d@%dx%d/0", width, height, displayMaxWidthHeight, displayMaxWidthHeight)},
 	})
 	service.Add("minitouch", cmdctrl.CommandInfo{
-		Args: []string{"/data/local/tmp/minitouch"},
+		Args: []string{minitouchbin},
 	})
 
 	// uiautomator
