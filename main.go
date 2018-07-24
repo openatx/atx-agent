@@ -35,6 +35,7 @@ import (
 	"github.com/franela/goreq"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/mholt/archiver"
 	"github.com/openatx/androidutils"
 	"github.com/openatx/atx-agent/cmdctrl"
 	"github.com/pkg/errors"
@@ -800,19 +801,53 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 			}
 			deviceRotation = rotation
 		}
+
+		// Kill not controled minicap
+		killed := false
+		procWalk(func(proc procfs.Proc) {
+			executable, _ := proc.Executable()
+			if filepath.Base(executable) != "minicap" {
+				return
+			}
+			stat, err := proc.NewStat()
+			if err != nil || stat.PPID != 1 { // only not controled minicap need killed
+				return
+			}
+			if p, err := os.FindProcess(proc.PID); err == nil {
+				log.Println("Kill", executable)
+				p.Kill()
+				killed = true
+			}
+		})
+		if killed {
+			service.Start("minicap")
+		}
 		updateMinicapRotation(deviceRotation)
+
 		// APK Service will send rotation to atx-agent when rotation changes
 		runShellTimeout(5*time.Second, "am", "startservice", "--user", "0", "-n", "com.github.uiautomator/.Service")
 		fmt.Fprintf(w, "rotation change to %d", deviceRotation)
 	})
 
+	/*
+	 # URLRules:
+	 #   URLPath ends with / means directory, eg: $DEVICE_URL/upload/sdcard/
+	 #   The rest means file, eg: $DEVICE_URL/upload/sdcard/a.txt
+	 #
+	 # Upload a file to destination
+	 $ curl -X POST -F file=@file.txt -F mode=0755 $DEVICE_URL/upload/sdcard/a.txt
+
+	 # Upload a directory (file must be zip), URLPath must ends with /
+	 $ curl -X POST -F file=@dir.zip -F dir=true $DEVICE_URL/upload/sdcard/atx-stuffs/
+	*/
 	m.HandleFunc("/upload/{target:.*}", func(w http.ResponseWriter, r *http.Request) {
 		target := mux.Vars(r)["target"]
 		if runtime.GOOS != "windows" {
 			target = "/" + target
 		}
+		isDir := r.FormValue("dir") == "true"
 		var fileMode os.FileMode
-		if _, err := fmt.Sscanf(r.FormValue("mode"), "%o", &fileMode); err != nil {
+		if _, err := fmt.Sscanf(r.FormValue("mode"), "%o", &fileMode); !isDir && err != nil {
 			log.Printf("invalid file mode: %s", r.FormValue("mode"))
 			fileMode = 0644
 		} // %o base 8
@@ -826,27 +861,34 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 			file.Close()
 			r.MultipartForm.RemoveAll()
 		}()
-		if strings.HasSuffix(target, "/") {
-			target = path.Join(target, header.Filename)
-		}
 
-		targetDir := filepath.Dir(target)
+		var targetDir = target
+		if !isDir {
+			if strings.HasSuffix(target, "/") {
+				target = path.Join(target, header.Filename)
+			}
+			targetDir = filepath.Dir(target)
+		} else {
+			if !strings.HasSuffix(target, "/") {
+				http.Error(w, "URLPath must endswith / if upload a directory", 400)
+				return
+			}
+		}
 		if _, err := os.Stat(targetDir); os.IsNotExist(err) {
 			os.MkdirAll(targetDir, 0755)
 		}
 
-		fd, err := os.Create(target)
+		if isDir {
+			err = archiver.Zip.Read(file, target)
+		} else {
+			err = copyToFile(file, target)
+		}
+
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		defer fd.Close()
-		written, err := io.Copy(fd, file)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if fileMode != 0 {
+		if !isDir && fileMode != 0 {
 			os.Chmod(target, fileMode)
 		}
 		if fileInfo, err := os.Stat(target); err == nil {
@@ -855,7 +897,7 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"target": target,
-			"size":   written,
+			"isDir":  isDir,
 			"mode":   fmt.Sprintf("0%o", fileMode),
 		})
 	})

@@ -96,6 +96,14 @@ $ curl -F "file=@somefile.txt" $DEVICE_URL/upload/sdcard/
 $ curl -F "file=@somefile.txt" $DEVICE_URL/upload/sdcard/tmp.txt
 ```
 
+上传目录（url必须以/结尾)
+
+```bash
+$ curl -F file=@some.zip -F dir=true $DEVICE_URL/upload/sdcard/
+```
+
+相当于将`some.zip`上传到手机，然后执行`unzip some.zip -d /sdcard`, 最后将`some.zip`删除
+
 ## 离线下载
 ```bash
 # 离线下载，返回ID

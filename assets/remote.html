@@ -19,20 +19,25 @@
       g = canvas.getContext('2d')
     var ws = new WebSocket('ws://' + location.host + "/minicap")
     ws.binaryType = 'blob'
-    ws.onclose = function() {
+    ws.onclose = function () {
       console.log('onclose', arguments)
+      var warn = document.createElement("div")
+      warn.innerText = "Websocket closed, Refresh to reload."
+      warn.style.color = "red"
+      warn.style.fontSize = "20px"
+      document.body.appendChild(warn);
     }
-    ws.onerror = function() {
+    ws.onerror = function () {
       console.log('onerror', arguments)
     }
-    ws.onmessage = function(message) {
+    ws.onmessage = function (message) {
       if (message.data instanceof Blob) {
         var blob = new Blob([message.data], {
           type: 'image/jpeg'
         })
         var URL = window.URL || window.webkitURL
         var img = new Image()
-        img.onload = function() {
+        img.onload = function () {
           console.log(img.width, img.height)
           canvas.width = img.width
           canvas.height = img.height
@@ -49,7 +54,7 @@
         console.log(message.data)
       }
     }
-    ws.onopen = function() {
+    ws.onopen = function () {
       console.log('onopen', arguments)
       ws.send('1920x1080/0')
     }
