@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"regexp"
@@ -40,6 +41,8 @@ func installUiautomatorAPK() error {
 }
 
 func installMinicap() error {
+	minicapbin := fmt.Sprintf("%v/minicap", expath)
+	minicapso := fmt.Sprintf("%v/minicap.so", expath)
 	if runtime.GOOS == "windows" {
 		return nil
 	}
@@ -52,8 +55,8 @@ func installMinicap() error {
 	// 	}
 	// }
 	// remove first to prevent "text file busy"
-	os.Remove("/data/local/tmp/minicap")
-	os.Remove("/data/local/tmp/minicap.so")
+	os.Remove(minicapbin)
+	os.Remove(minicapso)
 
 	minicapSource := "https://github.com/codeskyblue/stf-binaries/raw/master/node_modules/minicap-prebuilt/prebuilt"
 	propOutput, err := runShell("getprop")
@@ -75,12 +78,12 @@ func installMinicap() error {
 		sdk = sdk + pre
 	}
 	binURL := strings.Join([]string{minicapSource, abi, "bin", "minicap"}, "/")
-	_, err = httpDownload("/data/local/tmp/minicap", binURL, 0755)
+	_, err = httpDownload(minicapbin, binURL, 0755)
 	if err != nil {
 		return err
 	}
 	libURL := strings.Join([]string{minicapSource, abi, "lib", "android-" + sdk, "minicap.so"}, "/")
-	_, err = httpDownload("/data/local/tmp/minicap.so", libURL, 0644)
+	_, err = httpDownload(minicapso, libURL, 0644)
 	if err != nil {
 		return err
 	}
@@ -88,9 +91,10 @@ func installMinicap() error {
 }
 
 func installMinitouch() error {
+	minitouchbin := fmt.Sprintf("%v/minitouch", expath)
 	baseURL := "https://github.com/codeskyblue/stf-binaries/raw/master/node_modules/minitouch-prebuilt/prebuilt"
 	abi := getCachedProperty("ro.product.cpu.abi")
 	binURL := strings.Join([]string{baseURL, abi, "bin/minitouch"}, "/")
-	_, err := httpDownload("/data/local/tmp/minitouch", binURL, 0755)
+	_, err := httpDownload(minitouchbin, binURL, 0755)
 	return err
 }
