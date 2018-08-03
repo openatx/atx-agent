@@ -13,14 +13,6 @@ import (
 	"github.com/miekg/dns"
 )
 
-var (
-	version    = "dev"
-	owner      = "openatx"
-	repo       = "atx-agent"
-	listenPort int
-	httpServer *http.Server
-)
-
 func dnsLookupHost(hostname string) (ip net.IP, err error) {
 	for _, dnsServer := range []string{"114.114.114.114", "8.8.4.4"} {
 		ip, err = dnsLookupHostWithDNS(hostname, dnsServer)

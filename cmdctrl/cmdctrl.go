@@ -43,6 +43,9 @@ type CommandInfo struct {
 	NextLaunchWait  time.Duration // 0.5s
 	RecoverDuration time.Duration // 30s
 
+	OnStart func() error // if return non nil, cmd will not run
+	OnStop  func()
+
 	Stderr io.Writer // nil
 	Stdout io.Writer // nil
 	Stdin  io.Reader // nil
@@ -97,6 +100,11 @@ func (cc *CommandCtrl) Start(name string) error {
 	pkeeper, ok := cc.cmds[name]
 	if !ok {
 		return errors.New("cmdctl not found: " + name)
+	}
+	if pkeeper.cmdInfo.OnStart != nil {
+		if err := pkeeper.cmdInfo.OnStart(); err != nil {
+			return err
+		}
 	}
 	return pkeeper.start()
 }
@@ -157,6 +165,17 @@ func (cc *CommandCtrl) UpdateArgs(name string, args ...string) error {
 		return nil
 	}
 	return cc.Restart(name)
+}
+
+// Running return bool indicate if program is still running
+func (cc *CommandCtrl) Running(name string) bool {
+	cc.rl.RLock()
+	defer cc.rl.RUnlock()
+	pkeeper, ok := cc.cmds[name]
+	if !ok {
+		return false
+	}
+	return pkeeper.keeping
 }
 
 // keep process running
@@ -231,6 +250,9 @@ func (p *processKeeper) start() error {
 		}
 	CMD_DONE:
 		debugPrintf("program finished")
+		if p.cmdInfo.OnStop != nil {
+			p.cmdInfo.OnStop()
+		}
 		p.mu.Lock()
 		p.running = false
 		p.keeping = false

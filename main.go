@@ -12,7 +12,6 @@ import (
 	"html/template"
 	"io"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -39,6 +38,7 @@ import (
 	"github.com/openatx/androidutils"
 	"github.com/openatx/atx-agent/cmdctrl"
 	"github.com/pkg/errors"
+	"github.com/qiniu/log"
 	"github.com/rs/cors"
 	"github.com/shogo82148/androidbinary/apk"
 )
@@ -53,11 +53,17 @@ var (
 			return true
 		},
 	}
+
+	version    = "dev"
+	owner      = "openatx"
+	repo       = "atx-agent"
+	listenPort int
 )
 
-func init() {
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-}
+const (
+	apkVersionCode = 4
+	apkVersionName = "1.0.4"
+)
 
 // singleFight for http request
 // - minicap
@@ -189,11 +195,6 @@ func updateMinicapRotation(rotation int) {
 	service.UpdateArgs("minicap", "/data/local/tmp/minicap", "-S", "-P",
 		fmt.Sprintf("%dx%d@%dx%d/%d", width, height, displayMaxWidthHeight, displayMaxWidthHeight, rotation))
 }
-
-const (
-	apkVersionCode = 4
-	apkVersionName = "1.0.4"
-)
 
 func checkUiautomatorInstalled() (ok bool) {
 	pi, err := androidutils.StatPackage("com.github.uiautomator")
@@ -456,7 +457,20 @@ func translateMinicap(conn net.Conn, jpgC chan []byte, quitC chan bool) error {
 	return err
 }
 
-func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
+type Server struct {
+	tunnel     *TunnelProxy
+	httpServer *http.Server
+}
+
+func NewServer(tunnel *TunnelProxy) *Server {
+	server := &Server{
+		tunnel: tunnel,
+	}
+	server.initHTTPServer()
+	return server
+}
+
+func (server *Server) initHTTPServer() {
 	m := mux.NewRouter()
 
 	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -735,7 +749,7 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel() // The document says need to call cancel(), but I donot known why.
-			httpServer.Shutdown(ctx)
+			server.httpServer.Shutdown(ctx)
 		}()
 	})
 
@@ -756,6 +770,13 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 			http.Error(w, err.Error(), 500)
 		}
 	}).Methods("DELETE")
+
+	m.HandleFunc("/uiautomator", func(w http.ResponseWriter, r *http.Request) {
+		running := service.Running("uiautomator")
+		renderJSON(w, map[string]interface{}{
+			"running": running,
+		})
+	})
 
 	m.HandleFunc("/raw/{filepath:.*}", func(w http.ResponseWriter, r *http.Request) {
 		filepath := mux.Vars(r)["filepath"]
@@ -778,7 +799,7 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 		apkServiceTimer.Reset(apkServiceTimeout)
 		devInfo := getDeviceInfo()
 		devInfo.Battery.Update()
-		if err := tunnel.UpdateInfo(devInfo); err != nil {
+		if err := server.tunnel.UpdateInfo(devInfo); err != nil {
 			io.WriteString(w, "Failure "+err.Error())
 			return
 		}
@@ -1289,8 +1310,11 @@ func ServeHTTP(lis net.Listener, tunnel *TunnelProxy) error {
 	var handler = cors.New(cors.Options{
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE"},
 	}).Handler(m)
-	httpServer = &http.Server{Handler: handler} // url(/stop) need it.
-	return httpServer.Serve(lis)
+	server.httpServer = &http.Server{Handler: handler} // url(/stop) need it.
+}
+
+func (s *Server) Serve(lis net.Listener) error {
+	return s.httpServer.Serve(lis)
 }
 
 func runDaemon() {
@@ -1425,11 +1449,17 @@ func main() {
 		Stderr:          os.Stderr,
 		MaxRetries:      3,
 		RecoverDuration: 30 * time.Second,
+		OnStart: func() error {
+			log.Println("service uiautomator: startservice com.github.uiautomator/.Service")
+			runShell("am", "startservice", "-n", "com.github.uiautomator/.Service")
+			return nil
+		},
+		OnStop: func() {
+			log.Println("service uiautomator: stopservice com.github.uiautomator/.Service")
+			runShell("am", "stopservice", "-n", "com.github.uiautomator/.Service")
+		},
 	})
 	if !*fNoUiautomator {
-		if _, err := runShell("am", "start", "-W", "-n", "com.github.uiautomator/.MainActivity"); err != nil {
-			log.Println("start uiautomator err:", err)
-		}
 		if err := service.Start("uiautomator"); err != nil {
 			log.Println("uiautomator start failed:", err)
 		}
@@ -1444,6 +1474,8 @@ func main() {
 		go tunnel.Heratbeat()
 	}
 
+	server := NewServer(tunnel)
+
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
@@ -1451,11 +1483,11 @@ func main() {
 			log.Println("receive signal", sig)
 			service.StopAll()
 			os.Exit(0)
-			httpServer.Shutdown(context.TODO())
+			server.httpServer.Shutdown(context.TODO())
 		}
 	}()
 	// run server forever
-	if err := ServeHTTP(listener, tunnel); err != nil {
+	if err := server.Serve(listener); err != nil {
 		log.Println("server quit:", err)
 	}
 }
