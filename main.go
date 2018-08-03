@@ -29,7 +29,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/codeskyblue/kexec"
 	"github.com/codeskyblue/procfs"
 	"github.com/franela/goreq"
 	"github.com/gorilla/mux"
@@ -40,6 +39,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/qiniu/log"
 	"github.com/rs/cors"
+	"github.com/sevlyar/go-daemon"
 	"github.com/shogo82148/androidbinary/apk"
 )
 
@@ -786,7 +786,7 @@ func (server *Server) initHTTPServer() {
 	// keep ApkService always running
 	// if no activity in 5min, then restart apk service
 	const apkServiceTimeout = 5 * time.Minute
-	apkServiceTimer := time.NewTimer(apkServiceTimeout)
+	apkServiceTimer := NewSafeTimer(apkServiceTimeout)
 	go func() {
 		for range apkServiceTimer.C {
 			log.Println("startservice com.github.uiautomator/.Service")
@@ -1317,19 +1317,34 @@ func (s *Server) Serve(lis net.Listener) error {
 	return s.httpServer.Serve(lis)
 }
 
-func runDaemon() {
-	environ := os.Environ()
-	// env:IGNORE_SIGHUP forward stdout and stderr to file
-	// env:ATX_AGENT will ignore -d flag
-	environ = append(environ, "IGNORE_SIGHUP=true", "ATX_AGENT=1")
-	cmd := kexec.Command(os.Args[0], os.Args[1:]...)
-	cmd.Env = environ
-	cmd.Start()
-	select {
-	case err := <-GoFunc(cmd.Wait):
-		log.Fatalf("server started failed, %v", err)
-	case <-time.After(200 * time.Millisecond):
-		fmt.Printf("server started, listening on %v:%d\n", mustGetOoutboundIP(), listenPort)
+func runDaemon() (cntxt *daemon.Context) {
+	cntxt = &daemon.Context{
+		PidFileName: "/sdcard/atx-agent.pid",
+		PidFilePerm: 0644,
+		LogFileName: "/sdcard/atx-agent.log",
+		LogFilePerm: 0640,
+		WorkDir:     "./",
+		Umask:       022,
+	}
+	child, err := cntxt.Reborn()
+	if err != nil {
+		log.Fatal("Unale to run: ", err)
+	}
+	if child != nil {
+		return nil // return nil indicate program run in parent
+	}
+	return cntxt
+}
+
+func stopSelf() {
+	// kill previous daemon first
+	log.Println("stop server self")
+	_, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/stop", listenPort))
+	if err == nil {
+		log.Println("wait server stopped")
+		time.Sleep(1000 * time.Millisecond) // server will quit in 0.1s
+	} else {
+		log.Println(err)
 	}
 }
 
@@ -1358,12 +1373,7 @@ func main() {
 	}()
 
 	if *fStop {
-		_, err := http.Get("http://127.0.0.1:7912/stop")
-		if err != nil {
-			log.Println(err)
-		} else {
-			log.Println("server stopped")
-		}
+		stopSelf()
 		return
 	}
 
@@ -1376,40 +1386,20 @@ func main() {
 		}
 	}
 
-	os.Setenv("TMPDIR", "/sdcard/")
-	if *fDaemon && os.Getenv("ATX_AGENT") == "" {
-		runDaemon()
-		return
+	if _, err := os.Stat("/sdcard/tmp"); err != nil {
+		os.MkdirAll("/sdcard/tmp", 0755)
 	}
+	os.Setenv("TMPDIR", "/sdcard/tmp")
 
-	if os.Getenv("IGNORE_SIGHUP") == "true" {
-		fmt.Println("Enter into daemon mode")
-		os.Unsetenv("IGNORE_SIGHUP")
-
-		os.Rename("/sdcard/atx-agent.log", "/sdcard/atx-agent.log.old")
-		f, err := os.Create("/sdcard/atx-agent.log")
-		if err != nil {
-			panic(err)
+	if *fDaemon {
+		cntxt := runDaemon()
+		if cntxt == nil {
+			log.Printf("Enter into daemon mode, listening on %v:%d", mustGetOoutboundIP(), listenPort)
+			return
 		}
-		defer f.Close()
-
-		os.Stdout = f
-		os.Stderr = f
-		os.Stdin = nil
-
-		log.SetOutput(f)
-		log.Println("Ignore SIGHUP")
-		signal.Ignore(syscall.SIGHUP)
-
-		// kill previous daemon first
-		log.Println("Kill server")
-		_, err = http.Get(fmt.Sprintf("http://127.0.0.1:%d/stop", listenPort))
-		if err == nil {
-			log.Println("wait previous server stopped")
-			time.Sleep(1000 * time.Millisecond) // server will quit in 0.1s
-		} else {
-			log.Println(err)
-		}
+		defer cntxt.Release()
+		log.Print("- - - - - - - - - - - - - - -")
+		log.Print("daemon started")
 	}
 
 	fmt.Printf("atx-agent version %s\n", version)
