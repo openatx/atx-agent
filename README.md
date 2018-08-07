@@ -283,37 +283,8 @@ go generate
 go build -tags vfs
 ```
 
-# 重要更新历史
-- ?.?.?
-
-    * 还是看git日志吧
-
-- 0.0.8
-
-    * 支持连接Server获取最新版本，并自动升级
-
-- 0.0.7
-
-    * 响应服务端的websocket PING请求
-    * 如果安装失败，尝试先卸载，然后继续安装
-
-- 0.0.6
-
-    * 支持文件上传
-
-- 0.0.5
-
-    * 移除每次启动时自动安装minicap, com.github.uiautomator应用
-
-- 0.0.4
-
-    * 增加网页版的控制台
-    * 支持daemon模式运行
-
-- 0.0.3
-
-    * 增加安装应用支持
-
+## TODO
+- [ ] 使用支持多线程下载的库 https://github.com/cavaliercoder/grab
 
 # LICENSE
 [MIT](LICENSE)
