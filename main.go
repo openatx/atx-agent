@@ -1318,8 +1318,7 @@ func (s *Server) Serve(lis net.Listener) error {
 }
 
 func runDaemon() (cntxt *daemon.Context) {
-	cntxt = &daemon.Context{
-		PidFileName: "/sdcard/atx-agent.pid",
+	cntxt = &daemon.Context{ // remove pid to prevent resource busy
 		PidFilePerm: 0644,
 		LogFileName: "/sdcard/atx-agent.log",
 		LogFilePerm: 0640,
