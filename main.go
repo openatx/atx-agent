@@ -1251,7 +1251,7 @@ func (server *Server) initHTTPServer() {
 		io.WriteString(w, "update finished, restarting")
 		go func() {
 			log.Printf("restarting server")
-			runDaemon()
+			// TODO(ssx): runDaemon()
 		}()
 	})
 
@@ -1317,10 +1317,13 @@ func (s *Server) Serve(lis net.Listener) error {
 	return s.httpServer.Serve(lis)
 }
 
-func runDaemon() (cntxt *daemon.Context) {
+func runDaemon(logPath string) (cntxt *daemon.Context) {
+	if logPath == "" {
+		logPath = "/sdcard/atx-agent.log"
+	}
 	cntxt = &daemon.Context{ // remove pid to prevent resource busy
 		PidFilePerm: 0644,
-		LogFileName: "/sdcard/atx-agent.log",
+		LogFileName: logPath,
 		LogFilePerm: 0640,
 		WorkDir:     "./",
 		Umask:       022,
@@ -1353,6 +1356,7 @@ func main() {
 	fVersion := flag.Bool("v", false, "show version")
 	fRequirements := flag.Bool("r", false, "install minicap and uiautomator.apk")
 	fStop := flag.Bool("stop", false, "stop server")
+	fLog := flag.String("log", "", "log path")
 	fTunnelServer := flag.String("t", "", "tunnel server address")
 	fNoUiautomator := flag.Bool("nouia", false, "not start uiautomator")
 	flag.Parse()
@@ -1391,9 +1395,9 @@ func main() {
 	os.Setenv("TMPDIR", "/sdcard/tmp")
 
 	if *fDaemon {
-		cntxt := runDaemon()
+		cntxt := runDaemon(*fLog)
 		if cntxt == nil {
-			log.Printf("Enter into daemon mode, listening on %v:%d", mustGetOoutboundIP(), listenPort)
+			log.Printf("atx-agent listening on %v:%d", mustGetOoutboundIP(), listenPort)
 			return
 		}
 		defer cntxt.Release()
@@ -1466,13 +1470,26 @@ func main() {
 	server := NewServer(tunnel)
 
 	sigc := make(chan os.Signal, 1)
-	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 	go func() {
 		for sig := range sigc {
-			log.Println("receive signal", sig)
-			service.StopAll()
-			os.Exit(0)
-			server.httpServer.Shutdown(context.TODO())
+			needStop := false
+			switch sig {
+			case syscall.SIGTERM:
+				needStop = true
+			case syscall.SIGHUP:
+			case syscall.SIGINT:
+				if !*fDaemon {
+					needStop = true
+				}
+			}
+			if needStop {
+				log.Println("Catch signal", sig)
+				service.StopAll()
+				server.httpServer.Shutdown(context.TODO())
+				return
+			}
+			log.Println("Ignore signal", sig)
 		}
 	}()
 	// run server forever
