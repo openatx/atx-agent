@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"html/template"
 	"io"
@@ -29,13 +28,15 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/alecthomas/kingpin"
+	"github.com/codeskyblue/goreq"
 	"github.com/codeskyblue/procfs"
-	"github.com/franela/goreq"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/mholt/archiver"
 	"github.com/openatx/androidutils"
 	"github.com/openatx/atx-agent/cmdctrl"
+	"github.com/openatx/atx-agent/subcmd"
 	"github.com/pkg/errors"
 	"github.com/qiniu/log"
 	"github.com/rs/cors"
@@ -54,10 +55,11 @@ var (
 		},
 	}
 
-	version    = "dev"
-	owner      = "openatx"
-	repo       = "atx-agent"
-	listenPort int
+	version       = "dev"
+	owner         = "openatx"
+	repo          = "atx-agent"
+	listenPort    int
+	daemonLogPath = "/sdcard/atx-agent.log"
 )
 
 const (
@@ -1317,13 +1319,10 @@ func (s *Server) Serve(lis net.Listener) error {
 	return s.httpServer.Serve(lis)
 }
 
-func runDaemon(logPath string) (cntxt *daemon.Context) {
-	if logPath == "" {
-		logPath = "/sdcard/atx-agent.log"
-	}
+func runDaemon() (cntxt *daemon.Context) {
 	cntxt = &daemon.Context{ // remove pid to prevent resource busy
 		PidFilePerm: 0644,
-		LogFileName: logPath,
+		LogFileName: daemonLogPath,
 		LogFilePerm: 0640,
 		WorkDir:     "./",
 		Umask:       022,
@@ -1346,23 +1345,27 @@ func stopSelf() {
 		log.Println("wait server stopped")
 		time.Sleep(1000 * time.Millisecond) // server will quit in 0.1s
 	} else {
-		log.Println(err)
+		log.Println("already stopped")
 	}
 }
 
 func main() {
-	fDaemon := flag.Bool("d", false, "run daemon")
-	flag.IntVar(&listenPort, "p", 7912, "listen port") // Create on 2017/09/12
-	fVersion := flag.Bool("v", false, "show version")
-	fRequirements := flag.Bool("r", false, "install minicap and uiautomator.apk")
-	fStop := flag.Bool("stop", false, "stop server")
-	fLog := flag.String("log", "", "log path")
-	fTunnelServer := flag.String("t", "", "tunnel server address")
-	fNoUiautomator := flag.Bool("nouia", false, "not start uiautomator")
-	flag.Parse()
+	fDaemon := kingpin.Flag("daemon", "run in daemon mode").Short('d').Bool()
+	kingpin.Flag("port", "listen port").Default("7912").Short('p').IntVar(&listenPort) // Create on 2017/09/12
+	fStop := kingpin.Flag("stop", "stop server").Bool()
+	kingpin.Flag("log", "log file path when in daemon mode").StringVar(&daemonLogPath)
+	fTunnelServer := kingpin.Flag("server", "server url").Short('t').String()
+	fNoUiautomator := kingpin.Flag("nouia", "do not start uiautoamtor when start").Bool()
+	kingpin.Version(version)
+	kingpin.CommandLine.HelpFlag.Short('h')
+	kingpin.CommandLine.VersionFlag.Short('v')
 
-	if *fVersion {
-		fmt.Println(version)
+	curl := kingpin.Command("curl", "simulate curl command")
+	subcmd.RegisterCurl(curl)
+
+	switch kingpin.Parse() {
+	case "curl":
+		subcmd.DoCurl()
 		return
 	}
 
@@ -1380,14 +1383,14 @@ func main() {
 		return
 	}
 
-	if *fRequirements {
-		log.Println("check dependencies")
-		if err := installRequirements(); err != nil {
-			// panic(err)
-			log.Println("requirements not ready:", err)
-			return
-		}
-	}
+	// if *fRequirements {
+	// 	log.Println("check dependencies")
+	// 	if err := installRequirements(); err != nil {
+	// 		// panic(err)
+	// 		log.Println("requirements not ready:", err)
+	// 		return
+	// 	}
+	// }
 
 	if _, err := os.Stat("/sdcard/tmp"); err != nil {
 		os.MkdirAll("/sdcard/tmp", 0755)
@@ -1395,7 +1398,7 @@ func main() {
 	os.Setenv("TMPDIR", "/sdcard/tmp")
 
 	if *fDaemon {
-		cntxt := runDaemon(*fLog)
+		cntxt := runDaemon()
 		if cntxt == nil {
 			log.Printf("atx-agent listening on %v:%d", mustGetOoutboundIP(), listenPort)
 			return

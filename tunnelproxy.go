@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/codeskyblue/goreq"
 	"github.com/codeskyblue/heartbeat"
-	"github.com/franela/goreq"
 	"github.com/openatx/androidutils"
 	"github.com/openatx/atx-server/proto"
 )
@@ -130,6 +130,7 @@ func (t *TunnelProxy) checkUpdate() error {
 	// 			return err
 	// 		}
 	// 		log.Printf("restarting server")
+	// os.Setenv(daemon.MARK_NAME, daemon.MARK_VALUE+":reset")
 	// 		runDaemon()
 	// 		os.Exit(0)
 	// 	}

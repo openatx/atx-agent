@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/franela/goreq"
+	"github.com/codeskyblue/goreq"
 	"github.com/miekg/dns"
 )
 
