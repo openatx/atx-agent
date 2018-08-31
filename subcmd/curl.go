@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/alecthomas/kingpin"
 	"github.com/codeskyblue/goreq"
@@ -68,12 +69,14 @@ var (
 	headers  *http.Header
 	values   *url.Values
 	bodyData string
+	duration time.Duration
 )
 
 func RegisterCurl(curl *kingpin.CmdClause) {
 	curl.Flag("request", "Specify request command to use").Short('X').Default("GET").StringVar(&method)
 	curl.Arg("url", "url string").Required().StringVar(&reqUrl)
 	curl.Flag("data", "body data").StringVar(&bodyData)
+	curl.Flag("timeout", "timeout send and receive response").Default("10s").DurationVar(&duration)
 	headers = HTTPHeader(curl.Flag("header", "Add a HTTP header to the request.").Short('H'))
 	values = HTTPValue(curl.Flag("form", "Add a HTTP form values").Short('F'))
 }
@@ -87,6 +90,8 @@ func DoCurl() {
 		Uri:    reqUrl,
 	}
 	request.ShowDebug = true
+	request.Timeout = duration
+
 	for k, values := range *headers {
 		for _, v := range values {
 			request.AddHeader(k, v)
@@ -95,6 +100,7 @@ func DoCurl() {
 	if method == "GET" {
 		request.QueryString = *values
 	} else if method == "POST" {
+		request.AddHeader("Content-Type", "application/x-www-form-urlencoded")
 		if bodyData != "" {
 			request.Body = bodyData
 		} else {
