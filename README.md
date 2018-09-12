@@ -195,7 +195,7 @@ Websocket连接 `$DEVICE_URL/minitouch`, 一行行的按照JSON的格式写入
     坐标(X: 50%, Y: 50%), index代表第几个手指, `pressure`是可选的。
 
     ```json
-    {"operation": "d", "index": 0, "pX": 0.5, "pY": 0.5, "pressure": 50}
+    {"operation": "d", "index": 0, "xP": 0.5, "yP": 0.5, "pressure": 50}
     ```
 
 - Touch Commit
@@ -207,7 +207,7 @@ Websocket连接 `$DEVICE_URL/minitouch`, 一行行的按照JSON的格式写入
 - Touch Move
 
     ```json
-    {"operation": "m", "index": 0, "pX": 0.5, "pY": 0.5, "pressure": 50}
+    {"operation": "m", "index": 0, "xP": 0.5, "yP": 0.5, "pressure": 50}
     ```
 
 - Touch Up
@@ -219,9 +219,9 @@ Websocket连接 `$DEVICE_URL/minitouch`, 一行行的按照JSON的格式写入
 - 点击x:20%, y:20,滑动到x:40%, y:50%
 
     ```json
-    {"operation": "d", "index": 0, "pX": 0.20, "pY": 0.20, "pressure": 50}
+    {"operation": "d", "index": 0, "xP": 0.20, "yP": 0.20, "pressure": 50}
     {"operation": "c"}
-    {"operation": "m", "index": 0, "pX": 0.40, "pY": 0.50, "pressure": 50}
+    {"operation": "m", "index": 0, "xP": 0.40, "yP": 0.50, "pressure": 50}
     {"operation": "c"}
     {"operation": "u", "index": 0}
     {"operation": "c"}
