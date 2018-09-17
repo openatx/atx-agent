@@ -31,6 +31,7 @@ import (
 	"github.com/alecthomas/kingpin"
 	"github.com/codeskyblue/goreq"
 	"github.com/codeskyblue/procfs"
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/mholt/archiver"
@@ -383,6 +384,7 @@ var (
 	// uiautomatorProxy := httputil.NewSingleHostReverseProxy(target)
 	uiautomatorProxy = &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
+			req.URL.RawQuery = "" // ignore http query
 			req.URL.Scheme = "http"
 			req.URL.Host = "127.0.0.1:9008"
 		},
@@ -1312,7 +1314,8 @@ func (server *Server) initHTTPServer() {
 	var handler = cors.New(cors.Options{
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE"},
 	}).Handler(m)
-	server.httpServer = &http.Server{Handler: handler} // url(/stop) need it.
+	logHandler := handlers.LoggingHandler(os.Stdout, handler)
+	server.httpServer = &http.Server{Handler: logHandler} // url(/stop) need it.
 }
 
 func (s *Server) Serve(lis net.Listener) error {
@@ -1350,12 +1353,6 @@ func stopSelf() {
 }
 
 func main() {
-	fDaemon := kingpin.Flag("daemon", "run in daemon mode").Short('d').Bool()
-	kingpin.Flag("port", "listen port").Default("7912").Short('p').IntVar(&listenPort) // Create on 2017/09/12
-	fStop := kingpin.Flag("stop", "stop server").Bool()
-	kingpin.Flag("log", "log file path when in daemon mode").StringVar(&daemonLogPath)
-	fTunnelServer := kingpin.Flag("server", "server url").Short('t').String()
-	fNoUiautomator := kingpin.Flag("nouia", "do not start uiautoamtor when start").Bool()
 	kingpin.Version(version)
 	kingpin.CommandLine.HelpFlag.Short('h')
 	kingpin.CommandLine.VersionFlag.Short('v')
@@ -1363,20 +1360,21 @@ func main() {
 	curl := kingpin.Command("curl", "simulate curl command")
 	subcmd.RegisterCurl(curl)
 
+	fServer := kingpin.Command("server", "start server")
+	fDaemon := fServer.Flag("daemon", "daemon mode").Short('d').Bool()
+	fStop := fServer.Flag("stop", "stop server").Bool()
+	fServer.Flag("port", "listen port").Default("7912").Short('p').IntVar(&listenPort) // Create on 2017/09/12
+	fServer.Flag("log", "log file path when in daemon mode").StringVar(&daemonLogPath)
+	fTunnelServer := fServer.Flag("server", "server url").Short('t').String()
+	fNoUiautomator := fServer.Flag("nouia", "do not start uiautoamtor when start").Bool()
+
 	switch kingpin.Parse() {
 	case "curl":
 		subcmd.DoCurl()
 		return
+	case "server":
+		// continue
 	}
-
-	defer func() {
-		if e := recover(); e != nil {
-			log.Println("Detect panic !!!", e)
-			ioutil.WriteFile("/sdcard/atx-panic.txt", []byte(fmt.Sprintf(
-				"Time: %s\n%v", time.Now().Format("2006-01-02 15:04:05"),
-				e)), 0644)
-		}
-	}()
 
 	if *fStop {
 		stopSelf()

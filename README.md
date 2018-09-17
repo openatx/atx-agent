@@ -22,7 +22,7 @@ $ GOOS=linux GOARCH=arm go build -tags vfs
 $ adb push atx-agent /data/local/tmp
 $ adb shell chmod 755 /data/local/tmp/atx-agent
 # launch atx-agent in daemon mode
-$ adb shell /data/local/tmp/atx-agent -d
+$ adb shell /data/local/tmp/atx-agent server -d
 ```
 
 默认监听的端口是7912。
