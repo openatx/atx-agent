@@ -32,6 +32,7 @@ func getDeviceInfo() *proto.DeviceInfo {
 		battery := androidutils.Battery{}
 		battery.Update()
 		devInfo.Battery = &battery
+		devInfo.Port = listenPort
 
 		memory, err := androidutils.MemoryInfo()
 		if err != nil {
