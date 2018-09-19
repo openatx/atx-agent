@@ -204,7 +204,7 @@ func mainActivityOf(packageName string) (activity string, err error) {
 		if err != nil {
 			return "", err
 		}
-		return pkg.MainAcitivty()
+		return pkg.MainActivity()
 	}
 	return "", errors.New("package not found")
 }

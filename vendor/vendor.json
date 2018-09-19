@@ -243,10 +243,11 @@
 			"revisionTime": "2018-03-22T22:00:05Z"
 		},
 		{
-			"checksumSHA1": "prASThxFUGWu8eWUsEjWuTLHJK0=",
+			"checksumSHA1": "8VXZMguWi1Y9SuPbqaDw75GE5fU=",
 			"path": "github.com/shogo82148/androidbinary",
-			"revision": "35135bc129e0f91d783d6fdd2e3f4c56b8db1735",
-			"revisionTime": "2018-06-21T01:04:41Z"
+			"revision": "3f48f528944422a8bc5e1381a86e703af8b4fa9a",
+			"revisionTime": "2018-06-27T05:31:04Z",
+			"tree": true
 		},
 		{
 			"checksumSHA1": "/Hpx1mK8G3eD35ZhGIqqxuvR888=",

@@ -108,8 +108,8 @@ func (k *Apk) PackageName() string {
 	return k.manifest.Package
 }
 
-// MainAcitivty returns the name of the main activity.
-func (k *Apk) MainAcitivty() (activity string, err error) {
+// MainActivty returns the name of the main activity.
+func (k *Apk) MainActivity() (activity string, err error) {
 	for _, act := range k.manifest.App.Activities {
 		for _, intent := range act.IntentFilters {
 			if intent.Action.Name == "android.intent.action.MAIN" &&
