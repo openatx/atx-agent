@@ -2,80 +2,37 @@ package main
 
 import (
 	"context"
-	"errors"
 	"log"
 	"net"
-	"net/http"
-	"strings"
 	"time"
-
-	"github.com/codeskyblue/goreq"
-	"github.com/miekg/dns"
 )
 
-func dnsLookupHost(hostname string) (ip net.IP, err error) {
-	for _, dnsServer := range []string{"114.114.114.114", "8.8.4.4"} {
-		ip, err = dnsLookupHostWithDNS(hostname, dnsServer)
-		if err == nil {
-			return
-		}
-	}
-	defaultDNSResolver := getProperty("net.dns1")
-	if defaultDNSResolver == "" {
-		return
-	}
-	return dnsLookupHostWithDNS(hostname, defaultDNSResolver)
+type dnsSmartClient struct {
+	dialer *net.Dialer
 }
 
-func dnsLookupHostWithDNS(hostname string, dnsServer string) (ip net.IP, err error) {
-	if !strings.HasSuffix(hostname, ".") {
-		hostname += "."
+func newDnsSmartClient() *dnsSmartClient {
+	return &dnsSmartClient{
+		dialer: &net.Dialer{
+			Timeout:   3 * time.Second,
+			KeepAlive: 30 * time.Second,
+			DualStack: true,
+		},
 	}
-	m1 := new(dns.Msg)
-	m1.Id = dns.Id()
-	m1.RecursionDesired = true
-	m1.Question = []dns.Question{
-		{hostname, dns.TypeA, dns.ClassINET},
+}
+func (c *dnsSmartClient) Dial(ctx context.Context, network, address string) (conn net.Conn, err error) {
+	dns1 := getProperty("net.dns1")
+	if dns1 == "" {
+		// 国内DNS列表: https://www.zhihu.com/question/32229915
+		dns1 = "114.114.114.114"
 	}
-	c := new(dns.Client)
-	c.SingleInflight = true
-
-	in, _, err := c.Exchange(m1, dnsServer+":53")
-	if err != nil {
-		return nil, err
-	}
-	if len(in.Answer) == 0 {
-		return nil, errors.New("dns return empty answer")
-	}
-	log.Println("dns:"+dnsServer, in.Answer[0])
-	if t, ok := in.Answer[0].(*dns.A); ok {
-		return t.A, nil
-	}
-	if t, ok := in.Answer[0].(*dns.CNAME); ok {
-		return dnsLookupHostWithDNS(t.Target, dnsServer)
-	}
-	return nil, errors.New("dns resolve failed: " + hostname)
+	log.Println("dns resolve", dns1)
+	return c.dialer.DialContext(ctx, "udp", dns1+":53")
 }
 
 func init() {
-	dialer := &net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
-		DualStack: true,
+	net.DefaultResolver = &net.Resolver{
+		PreferGo: true,
+		Dial:     newDnsSmartClient().Dial,
 	}
-
-	// manualy dns resolve
-	newDialContext := func(ctx context.Context, network, addr string) (net.Conn, error) {
-		host, port, _ := net.SplitHostPort(addr)
-		if net.ParseIP(host) == nil {
-			ip, err := dnsLookupHost(host)
-			if err != nil {
-				return nil, err
-			}
-			addr = ip.String() + ":" + port
-		}
-		return dialer.DialContext(ctx, network, addr)
-	}
-	http.DefaultTransport.(*http.Transport).DialContext = newDialContext
-	goreq.DefaultTransport.(*http.Transport).DialContext = newDialContext
 }

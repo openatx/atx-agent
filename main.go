@@ -29,11 +29,11 @@ import (
 	"time"
 
 	"github.com/alecthomas/kingpin"
-	"github.com/codeskyblue/goreq"
 	"github.com/codeskyblue/procfs"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
+	"github.com/levigross/grequests"
 	"github.com/mholt/archiver"
 	"github.com/openatx/androidutils"
 	"github.com/openatx/atx-agent/cmdctrl"
@@ -315,26 +315,19 @@ func (m *DownloadManager) DelayDel(id string, sleep time.Duration) {
 }
 
 func AsyncDownloadTo(url string, filepath string, autoRelease bool) (di *downloadProxy, err error) {
-	// do real http download
-	res, err := goreq.Request{
-		Uri:             url,
-		MaxRedirects:    10,
-		RedirectHeaders: true,
-	}.Do()
+	res, err := grequests.Get(url, &grequests.RequestOptions{
+		DialTimeout: 5 * time.Second,
+	})
 	if err != nil {
 		return
 	}
-	if res.StatusCode != http.StatusOK {
-		body, err := res.Body.ToString()
-		res.Body.Close()
-		if err != nil && err != bytes.ErrTooLarge {
-			return nil, fmt.Errorf("Expected HTTP Status code: %d", res.StatusCode)
-		}
+	if !res.Ok {
+		body := res.String()
 		return nil, errors.New(body)
 	}
 	file, err := os.Create(filepath)
 	if err != nil {
-		res.Body.Close()
+		res.Close()
 		return
 	}
 	var totalSize int
@@ -346,9 +339,9 @@ func AsyncDownloadTo(url string, filepath string, autoRelease bool) (di *downloa
 			defer downManager.Del(downloadKey)
 		}
 		defer di.Done()
-		defer res.Body.Close()
+		defer res.Close()
 		defer file.Close()
-		io.Copy(di, res.Body)
+		io.Copy(di, res)
 	}()
 	return
 }
@@ -1309,6 +1302,25 @@ func (server *Server) initHTTPServer() {
 		}
 	})
 
+	m.HandleFunc("/wlan/ip", func(w http.ResponseWriter, r *http.Request) {
+		itf, err := net.InterfaceByName("wlan0")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		addrs, err := itf.Addrs()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		for _, addr := range addrs {
+			if v, ok := addr.(*net.IPNet); ok {
+				io.WriteString(w, v.IP.String())
+			}
+			return
+		}
+		http.Error(w, "wlan0 have no ip address", 500)
+	})
 	m.Handle("/assets/{(.*)}", http.StripPrefix("/assets", http.FileServer(Assets)))
 
 	var handler = cors.New(cors.Options{
