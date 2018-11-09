@@ -939,7 +939,7 @@ func (server *Server) initHTTPServer() {
 		json.NewEncoder(w).Encode(status)
 	}).Methods("GET")
 
-	m.HandleFunc("/install", func(w http.ResponseWriter, r *http.Request) {
+	m.HandleFunc("/packages", func(w http.ResponseWriter, r *http.Request) {
 		var url = r.FormValue("url")
 		filepath := TempFileName("/sdcard/tmp", ".apk")
 		key := background.HTTPDownload(url, filepath, 0644)
@@ -947,9 +947,11 @@ func (server *Server) initHTTPServer() {
 			defer os.Remove(filepath) // release sdcard space
 
 			state := background.Get(key)
+			state.Status = "installing"
 			if err := background.Wait(key); err != nil {
 				log.Println("http download error")
 				state.Error = err.Error()
+				state.Status = "failure"
 				state.Message = "http download error"
 				return
 			}
@@ -958,6 +960,7 @@ func (server *Server) initHTTPServer() {
 			pkg, er := apk.OpenFile(filepath)
 			if er != nil {
 				state.Error = er.Error()
+				state.Status = "failure"
 				state.Message = "androidbinary parse apk error"
 				return
 			}
@@ -966,16 +969,83 @@ func (server *Server) initHTTPServer() {
 			state.PackageName = packageName
 
 			state.Message = "installing"
+			state.Status = "installing"
+			if err := installAPKForce(filepath, packageName); err != nil {
+				state.Error = err.Error()
+				state.Status = "failure"
+				state.Message = "error install"
+			} else {
+				state.Status = "success"
+				state.Message = "success installed"
+			}
+		}()
+		renderJSON(w, map[string]interface{}{
+			"success": true,
+			"data": map[string]string{
+				"id": key,
+			},
+		})
+	}).Methods("POST")
+
+	m.HandleFunc("/packages/{id}", func(w http.ResponseWriter, r *http.Request) {
+		id := mux.Vars(r)["id"]
+		state := background.Get(id)
+		w.Header().Set("Content-Type", "application/json")
+		renderJSON(w, map[string]interface{}{
+			"success": true,
+			"data": map[string]string{
+				"status":      state.Status,
+				"description": "todo",
+			},
+		})
+		json.NewEncoder(w).Encode(state)
+	}).Methods("GET")
+
+	// deprecated
+	m.HandleFunc("/install", func(w http.ResponseWriter, r *http.Request) {
+		var url = r.FormValue("url")
+		filepath := TempFileName("/sdcard/tmp", ".apk")
+		key := background.HTTPDownload(url, filepath, 0644)
+		go func() {
+			defer os.Remove(filepath) // release sdcard space
+
+			state := background.Get(key)
+			state.Status = "downloading"
+			if err := background.Wait(key); err != nil {
+				log.Println("http download error")
+				state.Error = err.Error()
+				state.Message = "http download error"
+				state.Status = "failure"
+				return
+			}
+
+			state.Message = "apk parsing"
+			pkg, er := apk.OpenFile(filepath)
+			if er != nil {
+				state.Error = er.Error()
+				state.Message = "androidbinary parse apk error"
+				state.Status = "failure"
+				return
+			}
+			defer pkg.Close()
+			packageName := pkg.PackageName()
+			state.PackageName = packageName
+
+			state.Message = "installing"
+			state.Status = "installing"
 			if err := installAPKForce(filepath, packageName); err != nil {
 				state.Error = err.Error()
 				state.Message = "error install"
+				state.Status = "failure"
 			} else {
 				state.Message = "success installed"
+				state.Status = "success"
 			}
 		}()
 		io.WriteString(w, key)
 	}).Methods("POST")
 
+	// deprecated
 	m.HandleFunc("/install/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := mux.Vars(r)["id"]
 		state := background.Get(id)
@@ -983,6 +1053,7 @@ func (server *Server) initHTTPServer() {
 		json.NewEncoder(w).Encode(state)
 	}).Methods("GET")
 
+	// deprecated
 	m.HandleFunc("/install/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := mux.Vars(r)["id"]
 		state := background.Get(id)
@@ -1435,6 +1506,7 @@ func main() {
 
 	// minicap + minitouch
 	devInfo := getDeviceInfo()
+
 	width, height := devInfo.Display.Width, devInfo.Display.Height
 	service.Add("minicap", cmdctrl.CommandInfo{
 		Environ: []string{"LD_LIBRARY_PATH=/data/local/tmp"},
@@ -1476,7 +1548,10 @@ func main() {
 		Secret:     "hello kitty",
 	}
 	if *fTunnelServer != "" {
-		// go tunnel.RunForever()
+		devInfo.ServerURL = *fTunnelServer
+		if !regexp.MustCompile(`https?://`).MatchString(devInfo.ServerURL) {
+			devInfo.ServerURL = "http://" + devInfo.ServerURL
+		}
 		go tunnel.Heratbeat()
 	}
 

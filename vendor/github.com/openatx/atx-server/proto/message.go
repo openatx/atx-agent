@@ -63,7 +63,8 @@ type DeviceInfo struct {
 	Present *bool `json:"present,omitempty"`
 	Using   *bool `json:"using,omitempty"`
 
-	Product *Product `json:"product,omitempty" gorethink:"product_id,reference,omitempty" gorethink_ref:"id"`
+	Product   *Product `json:"product,omitempty" gorethink:"product_id,reference,omitempty" gorethink_ref:"id"`
+	ServerURL string   `json:"serverUrl,omitempty"`
 }
 
 // "Brand Model Memory CPU" together can define a phone

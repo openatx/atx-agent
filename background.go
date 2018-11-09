@@ -29,9 +29,9 @@ type BackgroundState struct {
 	Error       string      `json:"error"`
 	Progress    interface{} `json:"progress"`
 	PackageName string      `json:"packageName,omitempty"`
-
-	err error
-	wg  sync.WaitGroup
+	Status      string      `json:"status"`
+	err         error
+	wg          sync.WaitGroup
 }
 
 type Background struct {
