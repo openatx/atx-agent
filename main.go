@@ -947,7 +947,7 @@ func (server *Server) initHTTPServer() {
 			defer os.Remove(filepath) // release sdcard space
 
 			state := background.Get(key)
-			state.Status = "installing"
+			state.Status = "downloading"
 			if err := background.Wait(key); err != nil {
 				log.Println("http download error")
 				state.Error = err.Error()
@@ -991,11 +991,12 @@ func (server *Server) initHTTPServer() {
 		id := mux.Vars(r)["id"]
 		state := background.Get(id)
 		w.Header().Set("Content-Type", "application/json")
+		data, _ := json.Marshal(state.Progress)
 		renderJSON(w, map[string]interface{}{
 			"success": true,
 			"data": map[string]string{
 				"status":      state.Status,
-				"description": "todo",
+				"description": string(data),
 			},
 		})
 		json.NewEncoder(w).Encode(state)
@@ -1440,20 +1441,25 @@ func main() {
 	kingpin.CommandLine.HelpFlag.Short('h')
 	kingpin.CommandLine.VersionFlag.Short('v')
 
-	curl := kingpin.Command("curl", "simulate curl command")
-	subcmd.RegisterCurl(curl)
+	cmdCurl := kingpin.Command("curl", "simulate curl command")
+	subcmd.RegisterCurl(cmdCurl)
 
-	fServer := kingpin.Command("server", "start server")
-	fDaemon := fServer.Flag("daemon", "daemon mode").Short('d').Bool()
-	fStop := fServer.Flag("stop", "stop server").Bool()
-	fServer.Flag("port", "listen port").Default("7912").Short('p').IntVar(&listenPort) // Create on 2017/09/12
-	fServer.Flag("log", "log file path when in daemon mode").StringVar(&daemonLogPath)
-	fTunnelServer := fServer.Flag("server", "server url").Short('t').String()
-	fNoUiautomator := fServer.Flag("nouia", "do not start uiautoamtor when start").Bool()
+	cmdServer := kingpin.Command("server", "start server")
+	fDaemon := cmdServer.Flag("daemon", "daemon mode").Short('d').Bool()
+	fStop := cmdServer.Flag("stop", "stop server").Bool()
+	cmdServer.Flag("port", "listen port").Default("7912").Short('p').IntVar(&listenPort) // Create on 2017/09/12
+	cmdServer.Flag("log", "log file path when in daemon mode").StringVar(&daemonLogPath)
+	fTunnelServer := cmdServer.Flag("server", "server url").Short('t').String()
+	fNoUiautomator := cmdServer.Flag("nouia", "do not start uiautoamtor when start").Bool()
+
+	kingpin.Command("version", "show version")
 
 	switch kingpin.Parse() {
 	case "curl":
 		subcmd.DoCurl()
+		return
+	case "version":
+		println(version)
 		return
 	case "server":
 		// continue
