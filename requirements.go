@@ -30,10 +30,10 @@ func installUiautomatorAPK() error {
 	if _, err := httpDownload("/data/local/tmp/app-debug-test.apk", baseURL+"/app-uiautomator-test.apk", 0644); err != nil {
 		return err
 	}
-	if err := installAPKForce("/data/local/tmp/app-debug.apk", "com.github.uiautomator"); err != nil {
+	if err := forceInstallAPK("/data/local/tmp/app-debug.apk"); err != nil {
 		return err
 	}
-	if err := installAPKForce("/data/local/tmp/app-debug-test.apk", "com.github.uiautomator.test"); err != nil {
+	if err := forceInstallAPK("/data/local/tmp/app-debug-test.apk"); err != nil {
 		return err
 	}
 	return nil
