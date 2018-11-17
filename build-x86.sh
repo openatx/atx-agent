@@ -3,15 +3,15 @@
 
 set -ex
 
-ADB=${ADB:-"adb.exe"}
 DEST="/data/local/tmp/atx-agent"
 
-echo "Build binary for arm ..."
-GOOS=linux GOARCH=arm go build
+echo "Build binary for x86(emulator) ..."
+GOOS=linux GOARCH=amd64 go build
 
 # go generate
 # GOOS=linux GOARCH=arm go build -tags vfs
 
+ADB="adb"
 $ADB push atx-agent $DEST
 $ADB shell chmod 755 $DEST
 $ADB shell $DEST server --stop

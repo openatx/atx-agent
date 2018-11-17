@@ -435,9 +435,11 @@ func main() {
 	kingpin.CommandLine.HelpFlag.Short('h')
 	kingpin.CommandLine.VersionFlag.Short('v')
 
+	// CMD: curl
 	cmdCurl := kingpin.Command("curl", "curl command")
 	subcmd.RegisterCurl(cmdCurl)
 
+	// CMD: server
 	cmdServer := kingpin.Command("server", "start server")
 	fDaemon := cmdServer.Flag("daemon", "daemon mode").Short('d').Bool()
 	fStop := cmdServer.Flag("stop", "stop server").Bool()
@@ -446,11 +448,16 @@ func main() {
 	fTunnelServer := cmdServer.Flag("server", "server url").Short('t').String()
 	fNoUiautomator := cmdServer.Flag("nouia", "do not start uiautoamtor when start").Bool()
 
+	// CMD: version
 	kingpin.Command("version", "show version")
 
+	// CMD: install
 	cmdIns := kingpin.Command("install", "install apk")
 	apkStart := cmdIns.Flag("start", "start when installed").Short('s').Bool()
 	apkPath := cmdIns.Arg("apkPath", "apk path").Required().String()
+
+	// CMD: info
+	kingpin.Command("info", "show device info")
 
 	switch kingpin.Parse() {
 	case "curl":
@@ -467,6 +474,10 @@ func main() {
 		if *apkStart {
 			am.Start(StartOptions{})
 		}
+		return
+	case "info":
+		data, _ := json.MarshalIndent(getDeviceInfo(), "", "  ")
+		println(string(data))
 		return
 	case "server":
 		// continue

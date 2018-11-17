@@ -369,6 +369,12 @@ func (server *Server) initHTTPServer() {
 		}
 	}()
 
+	m.HandleFunc("/info", func(w http.ResponseWriter, r *http.Request) {
+		info := getDeviceInfo()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(info)
+	})
+
 	m.HandleFunc("/info/battery", func(w http.ResponseWriter, r *http.Request) {
 		apkServiceTimer.Reset(apkServiceTimeout)
 		devInfo := getDeviceInfo()
@@ -880,12 +886,6 @@ func (server *Server) initHTTPServer() {
 			return
 		}
 		renderHTML(w, "terminal.html")
-	})
-
-	m.HandleFunc("/info", func(w http.ResponseWriter, r *http.Request) {
-		info := getDeviceInfo()
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(info)
 	})
 
 	screenshotIndex := -1
