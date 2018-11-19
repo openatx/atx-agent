@@ -3,7 +3,7 @@
 
 HTTP Server runs on android device
 
-运行再Android手机上的http服务器，旨在希望通过Wifi控制手机，完成手机的自动化功能。
+`atx-agent`是一个在Android系统上运行的二进制程序，监控并维持uiautomator的运行，提供相应的HTTP接口与`python-uiautomator2`进行交互。
 
 # Build
 需要Go版本 >= 1.10
@@ -14,7 +14,7 @@ $ go generate
 $ GOOS=linux GOARCH=arm go build -tags vfs
 ```
 
-# Usage
+# Installation
 从<https://github.com/openatx/atx-agent/releases>下载以`linux_armv7.tar.gz`结尾的二进制包。绝大部分手机都是linux-arm架构的。
 
 解压出`atx-agent`文件，然后打开控制台
