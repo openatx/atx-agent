@@ -369,17 +369,17 @@ func (server *Server) initHTTPServer() {
 		}
 	}()
 
+	deviceInfo := getDeviceInfo()
+
 	m.HandleFunc("/info", func(w http.ResponseWriter, r *http.Request) {
-		info := getDeviceInfo()
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(info)
+		json.NewEncoder(w).Encode(deviceInfo)
 	})
 
 	m.HandleFunc("/info/battery", func(w http.ResponseWriter, r *http.Request) {
 		apkServiceTimer.Reset(apkServiceTimeout)
-		devInfo := getDeviceInfo()
-		devInfo.Battery.Update()
-		if err := server.tunnel.UpdateInfo(devInfo); err != nil {
+		deviceInfo.Battery.Update()
+		if err := server.tunnel.UpdateInfo(deviceInfo); err != nil {
 			io.WriteString(w, "Failure "+err.Error())
 			return
 		}
