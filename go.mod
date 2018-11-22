@@ -44,6 +44,7 @@ require (
 	github.com/sevlyar/go-daemon v0.1.4
 	github.com/shogo82148/androidbinary v0.0.0-20180627093851-01c4bfa8b3b5
 	github.com/shurcooL/httpfs v0.0.0-20171119174359-809beceb2371
+	github.com/shurcooL/vfsgen v0.0.0-20181020040650-a97a25d856ca // indirect
 	github.com/sirupsen/logrus v1.1.1
 	github.com/stretchr/testify v1.2.2
 	github.com/ulikunitz/xz v0.5.5

@@ -6,13 +6,16 @@ HTTP Server runs on android device
 `atx-agent`是一个在Android系统上运行的二进制程序，监控并维持uiautomator的运行，提供相应的HTTP接口与`python-uiautomator2`进行交互。
 
 # Build
-需要Go版本 >= 1.10
+需要Go版本 >= 1.11, 这个版本之后可以不用设置GOPATH变量了。
 
 ```bash
-$ go get -v
+$ git clone https://github.com/openatx/atx-agent
+$ cd atx-agent
 $ go generate
 $ GOOS=linux GOARCH=arm go build -tags vfs
 ```
+
+Note: 如果你的网络很差，可以尝试使用<https://goproxy.io> 使用方法很简单,直接导入一个环境变量就可以了 `export GOPROXY=https://goproxy.io`
 
 # Installation
 从<https://github.com/openatx/atx-agent/releases>下载以`linux_armv7.tar.gz`结尾的二进制包。绝大部分手机都是linux-arm架构的。
