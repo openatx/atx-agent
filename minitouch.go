@@ -40,7 +40,7 @@ func drainTouchRequests(conn net.Conn, reqC chan TouchRequest) error {
 		return err
 	}
 
-	log.Debugf("handle touch requests maxX:%d maxY:%d maxPressure:%d maxContacts:%s", maxX, maxY, maxPressure, maxContacts)
+	log.Debugf("handle touch requests maxX:%d maxY:%d maxPressure:%d maxContacts:%d", maxX, maxY, maxPressure, maxContacts)
 	go io.Copy(ioutil.Discard, conn) // ignore the rest output
 	var posX, posY int
 	for req := range reqC {
