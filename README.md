@@ -143,10 +143,13 @@ $ curl -XGET $DEVICE_URL/packages/{packageName}/info
         "mainActivity": "com.github.uiautomator.MainActivity",
         "label": "ATX",
         "versionName": "1.1.7",
-        "versionCode": 1001007
+        "versionCode": 1001007,
+        "size":1760809
     }
 }
 ```
+
+其中`size`单位为字节
 
 ## 获取包的图标
 ```
