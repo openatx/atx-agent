@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image/jpeg"
 	"io"
 	"io/ioutil"
 	"log"
@@ -555,6 +556,7 @@ func (server *Server) initHTTPServer() {
 		})
 	}).Methods("POST")
 
+	// id: int
 	m.HandleFunc("/packages/{id}", func(w http.ResponseWriter, r *http.Request) {
 		id := mux.Vars(r)["id"]
 		state := background.Get(id)
@@ -569,6 +571,37 @@ func (server *Server) initHTTPServer() {
 		})
 		json.NewEncoder(w).Encode(state)
 	}).Methods("GET")
+
+	m.HandleFunc("/packages/{pkgname}/info", func(w http.ResponseWriter, r *http.Request){
+		pkgname := mux.Vars(r)["pkgname"]
+		info, err := pkgInfo(pkgname)
+		if err != nil {
+			renderJSON(w, map[string]interface{}{
+				"success": false,
+				"description": err.Error(),// "package " + strconv.Quote(pkgname) + " not found",
+			})
+			return
+		}
+		renderJSON(w, map[string]interface{}{
+			"success": true,
+			"data": info,
+		})
+	})
+
+	m.HandleFunc("/packages/{pkgname}/icon", func(w http.ResponseWriter, r *http.Request){
+		pkgname := mux.Vars(r)["pkgname"]
+		info, err := pkgInfo(pkgname)
+		if err != nil {
+			http.Error(w, "package not found", 403)
+			return
+		}
+		if info.Icon == nil {
+			http.Error(w, "package not found", 400)
+			return
+		}
+		w.Header().Set("Content-Type", "image/jpeg")
+		jpeg.Encode(w, info.Icon, &jpeg.Options{Quality: 80})
+	})
 
 	// deprecated
 	m.HandleFunc("/install", func(w http.ResponseWriter, r *http.Request) {

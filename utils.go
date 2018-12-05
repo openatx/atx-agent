@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -15,9 +14,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
+	"image"
 
+	"github.com/pkg/errors"
 	"github.com/codeskyblue/goreq"
 	"github.com/codeskyblue/procfs"
 	shellquote "github.com/kballard/go-shellquote"
@@ -174,6 +176,35 @@ func pidOf(packageName string) (pid int, err error) {
 		}
 	}
 	return 0, errors.New("package not found")
+}
+
+type PackageInfo struct {
+	MainActivity string `json:"mainActivity"`
+	Label        string `json:"label"`
+	VersionName  string `json:"versionName"`
+	VersionCode  int `json:"versionCode"`
+	Icon image.Image `json:"-"` 
+}
+
+func pkgInfo(packageName string) (info PackageInfo, err error) {
+	outbyte, err := runShell("pm", "path", packageName)
+	output := strings.TrimSpace(string(outbyte))
+	if !strings.HasPrefix(output, "package:") {
+		err = errors.New("package " + strconv.Quote(packageName) + " not found")
+		return
+	}
+	apkpath := output[len("package:"):]
+	pkg, err := apk.OpenFile(apkpath)
+	if err != nil {
+		err = errors.Wrap(err, packageName)
+		return
+	}
+	info.Label, _ = pkg.Label(nil)
+	info.MainActivity, _ = pkg.MainActivity()
+	info.Icon, _ = pkg.Icon(nil)
+	info.VersionCode = pkg.Manifest().VersionCode
+	info.VersionName = pkg.Manifest().VersionName
+	return
 }
 
 func procWalk(fn func(p procfs.Proc)) error {
