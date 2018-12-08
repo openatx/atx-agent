@@ -5,8 +5,8 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"fmt"
+	"image"
 	"io"
 	"log"
 	"net"
@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"github.com/codeskyblue/procfs"
 	shellquote "github.com/kballard/go-shellquote"
 	"github.com/openatx/androidutils"
+	"github.com/pkg/errors"
 	"github.com/shogo82148/androidbinary/apk"
 )
 
@@ -47,6 +49,18 @@ type Command struct {
 	Stderr     io.Writer
 }
 
+func (c *Command) shellPath() string {
+	sh := os.Getenv("SHELL")
+	if sh == "" {
+		sh, err := exec.LookPath("sh")
+		if err == nil {
+			return sh
+		}
+		sh = "/system/bin/sh"
+	}
+	return sh
+}
+
 func (c *Command) computedArgs() (name string, args []string) {
 	if c.Shell {
 		var cmdline string
@@ -56,7 +70,7 @@ func (c *Command) computedArgs() (name string, args []string) {
 			cmdline = strings.Join(c.Args, " ") // simple, but works well with ">". eg Args("echo", "hello", ">output.txt")
 		}
 		args = append(args, "-c", cmdline)
-		return "sh", args
+		return c.shellPath(), args
 	}
 	return c.Args[0], c.Args[1:]
 }
@@ -174,6 +188,41 @@ func pidOf(packageName string) (pid int, err error) {
 		}
 	}
 	return 0, errors.New("package not found")
+}
+
+type PackageInfo struct {
+	MainActivity string      `json:"mainActivity"`
+	Label        string      `json:"label"`
+	VersionName  string      `json:"versionName"`
+	VersionCode  int         `json:"versionCode"`
+	Size         int64       `json:"size"`
+	Icon         image.Image `json:"-"`
+}
+
+func pkgInfo(packageName string) (info PackageInfo, err error) {
+	outbyte, err := runShell("pm", "path", packageName)
+	output := strings.TrimSpace(string(outbyte))
+	if !strings.HasPrefix(output, "package:") {
+		err = errors.New("package " + strconv.Quote(packageName) + " not found")
+		return
+	}
+	apkpath := output[len("package:"):]
+	finfo, err := os.Stat(apkpath)
+	if err != nil {
+		return
+	}
+	info.Size = finfo.Size()
+	pkg, err := apk.OpenFile(apkpath)
+	if err != nil {
+		err = errors.Wrap(err, packageName)
+		return
+	}
+	info.Label, _ = pkg.Label(nil)
+	info.MainActivity, _ = pkg.MainActivity()
+	info.Icon, _ = pkg.Icon(nil)
+	info.VersionCode = pkg.Manifest().VersionCode
+	info.VersionName = pkg.Manifest().VersionName
+	return
 }
 
 func procWalk(fn func(p procfs.Proc)) error {

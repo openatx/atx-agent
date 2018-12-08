@@ -134,7 +134,31 @@ $ curl -X DELETE $DEVICE_URL/uiautomator
 Success
 ```
 
-## 程序自升级
+## 获取包信息
+```
+$ curl -XGET $DEVICE_URL/packages/{packageName}/info
+{
+    "success": true,
+    "data": {
+        "mainActivity": "com.github.uiautomator.MainActivity",
+        "label": "ATX",
+        "versionName": "1.1.7",
+        "versionCode": 1001007,
+        "size":1760809
+    }
+}
+```
+
+其中`size`单位为字节
+
+## 获取包的图标
+```
+$ curl -XGET $DEVICE_URL/packages/{packageName}/icon
+# 返回包的图标文件
+# 失败的情况 status code != 200
+```
+
+## 程序自升级(暂时不能用了)
 升级程序从gihub releases里面直接下载，升级完后自动重启
 
 升级到最新版

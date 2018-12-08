@@ -1,9 +1,12 @@
 #!/bin/bash
 #
 
-set -ex
 
-ADB=${ADB:-"adb.exe"}
+ADB=$(which adb.exe) # for windows-linux
+
+set -ex
+ADB=${ADB:-"adb"}
+
 DEST="/data/local/tmp/atx-agent"
 
 echo "Build binary for arm ..."
