@@ -189,6 +189,10 @@ func (server *Server) initHTTPServer() {
 
 	m.HandleFunc("/session/{pkgname}", func(w http.ResponseWriter, r *http.Request) {
 		packageName := mux.Vars(r)["pkgname"]
+		timeout, _ := strconv.Atoi(r.FormValue("timeout") ) // unit seconds
+		if timeout == 0 {
+			timeout = 60
+		}
 		mainActivity, err := mainActivityOf(packageName)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusGone) // 410
@@ -209,7 +213,8 @@ func (server *Server) initHTTPServer() {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		output, err := runShellTimeout(10*time.Second, "am", "start", flags, "-n", packageName+"/"+mainActivity)
+		launchTimeout := time.Duration(timeout) * time.Second
+		output, err := runShellTimeout(launchTimeout, "am", "start", flags, "-n", packageName+"/"+mainActivity)
 		if err != nil {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"success":      false,
