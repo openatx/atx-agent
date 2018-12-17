@@ -6,9 +6,8 @@ require (
 	github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc // indirect
 	github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf // indirect
 	github.com/codeskyblue/goreq v0.0.0-20180831024223-49450746aaef
-	github.com/codeskyblue/heartbeat v0.0.0-20180510083815-41c9a36c9169
+	github.com/codeskyblue/heartbeat v0.1.0
 	github.com/codeskyblue/procfs v0.0.0-20180206025622-a4741d578088
-	github.com/codeskyblue/realip v0.0.0-20180509031353-57e9cd075d0e // indirect
 	github.com/dsnet/compress v0.0.0-20171208185109-cc9eb1d7ad76
 	github.com/franela/goreq v0.0.0-20171204163338-bcd34c9993f8
 	github.com/getlantern/context v0.0.0-20181106182922-539649cc3118

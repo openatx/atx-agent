@@ -10,10 +10,16 @@ github.com/codeskyblue/goreq v0.0.0-20180831024223-49450746aaef h1:sdL9ZNuTIsV2P
 github.com/codeskyblue/goreq v0.0.0-20180831024223-49450746aaef/go.mod h1:oLy8Ek90H3f0q7rfacBoiG5HXJo4fDKU800pciAk4ZQ=
 github.com/codeskyblue/heartbeat v0.0.0-20180510083815-41c9a36c9169 h1:P+SqriwlWNS+MKgPC6JTs7Lipgk+yScuxzqFAvtVXNY=
 github.com/codeskyblue/heartbeat v0.0.0-20180510083815-41c9a36c9169/go.mod h1:L/Vc8wjkglTA5/s1l9/4YOa8e7sOzt4WerxU1AEC0LM=
+github.com/codeskyblue/heartbeat v0.1.0 h1:46OkhlsDfwijBM3hJ4ntP2q4DDNLIhn83Hy7hbWElkU=
+github.com/codeskyblue/heartbeat v0.1.0/go.mod h1:pFB0ihPR96d0DGpdqDcqbIsmPBUvJ9IW7IQMNbp1lo8=
 github.com/codeskyblue/procfs v0.0.0-20180206025622-a4741d578088 h1:dZRsYxcxzPmaWIkqNzx/X79ya1jwMgPJExRYeS60i0s=
 github.com/codeskyblue/procfs v0.0.0-20180206025622-a4741d578088/go.mod h1:LgpdL3YPlcwyMiEIRjqQaUNEVIpSyxhG8FC4mvoRh2M=
 github.com/codeskyblue/realip v0.0.0-20180509031353-57e9cd075d0e h1:ImKTOlij69pQ3ftNIpBCgTpz52NLJmn3NyHITlgOwVM=
 github.com/codeskyblue/realip v0.0.0-20180509031353-57e9cd075d0e/go.mod h1:S09jNhPIOrprdcNbJtRvu8SxrMPp61FQ2GEOm1So8u0=
+github.com/codeskyblue/realip v0.1.0 h1:edX7sjS9eSVkKDdsEKzzJs7G+FTjBOZc21A8Fnfm2bE=
+github.com/codeskyblue/realip v0.1.0/go.mod h1:u40LYBFKoL3VdgpadHU+HpbN+Z9QtdxfdBJ60K7cfy4=
+github.com/codeskyblue/safetime v0.2.0 h1:9SsUmIE/xyXl7gcHsFV5415+VsmFdf52lWcnqv/19VY=
+github.com/codeskyblue/safetime v0.2.0/go.mod h1:nxACt3tfibLz6RhKMzaVqGEYF0aL6OkoxK4JXcLyDFY=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dsnet/compress v0.0.0-20171208185109-cc9eb1d7ad76 h1:eX+pdPPlD279OWgdx7f6KqIRSONuK7egk+jDx7OM3Ac=
