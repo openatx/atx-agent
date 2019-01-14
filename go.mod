@@ -36,16 +36,17 @@ require (
 	github.com/oxtoacart/bpool v0.0.0-20150712133111-4e1c5567d7c2
 	github.com/pierrec/lz4 v2.0.5+incompatible
 	github.com/pierrec/xxHash v0.1.1
-	github.com/pkg/errors v0.8.0
+	github.com/pkg/errors v0.8.1
 	github.com/prometheus/procfs v0.0.0-20181005140218-185b4288413d
 	github.com/qiniu/log v0.0.0-20140728010919-a304a74568d6
 	github.com/rs/cors v1.6.0
 	github.com/sevlyar/go-daemon v0.1.4
-	github.com/shogo82148/androidbinary v0.0.0-20180627093851-01c4bfa8b3b5
+	github.com/shogo82148/androidbinary v0.0.1
 	github.com/shurcooL/httpfs v0.0.0-20171119174359-809beceb2371
 	github.com/shurcooL/vfsgen v0.0.0-20181020040650-a97a25d856ca // indirect
 	github.com/sirupsen/logrus v1.1.1
-	github.com/stretchr/testify v1.2.2
+	github.com/stretchr/objx v0.1.1 // indirect
+	github.com/stretchr/testify v1.3.0
 	github.com/ulikunitz/xz v0.5.5
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
 	golang.org/x/crypto v0.0.0-20181112202954-3d3f9f413869
