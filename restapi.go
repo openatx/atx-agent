@@ -572,23 +572,23 @@ func (server *Server) initHTTPServer() {
 		json.NewEncoder(w).Encode(state)
 	}).Methods("GET")
 
-	m.HandleFunc("/packages/{pkgname}/info", func(w http.ResponseWriter, r *http.Request){
+	m.HandleFunc("/packages/{pkgname}/info", func(w http.ResponseWriter, r *http.Request) {
 		pkgname := mux.Vars(r)["pkgname"]
 		info, err := pkgInfo(pkgname)
 		if err != nil {
 			renderJSON(w, map[string]interface{}{
-				"success": false,
-				"description": err.Error(),// "package " + strconv.Quote(pkgname) + " not found",
+				"success":     false,
+				"description": err.Error(), // "package " + strconv.Quote(pkgname) + " not found",
 			})
 			return
 		}
 		renderJSON(w, map[string]interface{}{
 			"success": true,
-			"data": info,
+			"data":    info,
 		})
 	})
 
-	m.HandleFunc("/packages/{pkgname}/icon", func(w http.ResponseWriter, r *http.Request){
+	m.HandleFunc("/packages/{pkgname}/icon", func(w http.ResponseWriter, r *http.Request) {
 		pkgname := mux.Vars(r)["pkgname"]
 		info, err := pkgInfo(pkgname)
 		if err != nil {
@@ -666,6 +666,11 @@ func (server *Server) initHTTPServer() {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 		}
 	}).Methods("PUT")
+
+	m.HandleFunc("/minitouch", func(w http.ResponseWriter, r *http.Request) {
+		service.Stop("minitouch", true)
+		io.WriteString(w, "minitouch stopped")
+	}).Methods("DELETE")
 
 	m.HandleFunc("/minitouch", singleFightNewerWebsocket(func(w http.ResponseWriter, r *http.Request, ws *websocket.Conn) {
 		defer ws.Close()

@@ -46,6 +46,8 @@ func drainTouchRequests(conn net.Conn, reqC chan TouchRequest) error {
 	for req := range reqC {
 		var err error
 		switch req.Operation {
+		case "r": // reset
+			_, err = conn.Write([]byte("r\n"))
 		case "d":
 			fallthrough
 		case "m":
