@@ -947,6 +947,11 @@ func (server *Server) initHTTPServer() {
 	m.Handle("/jsonrpc/0", uiautomatorProxy)
 	m.Handle("/ping", uiautomatorProxy)
 	m.HandleFunc("/screenshot/0", func(w http.ResponseWriter, r *http.Request) {
+		download := r.FormValue("download")
+		if download != "" {
+			w.Header().Set("Content-Disposition", "attachment; filename="+download)
+		}
+
 		if r.FormValue("minicap") == "false" || strings.ToLower(getCachedProperty("ro.product.manufacturer")) == "meizu" {
 			uiautomatorProxy.ServeHTTP(w, r)
 			return
