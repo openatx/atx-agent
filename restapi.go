@@ -208,18 +208,22 @@ func (server *Server) initHTTPServer() {
 		if flags == "" {
 			flags = "-W -S" // W: wait launched, S: stop before started
 		}
-
-		w.Header().Set("Content-Type", "application/json")
-		output, err := runShellTimeout(10*time.Second, "am", "start", flags, "-n", packageName+"/"+mainActivity)
+		timeout := r.FormValue("timeout") // supported value: 60s, 1m. 60 is invalid
+		duration, err := time.ParseDuration(timeout)
 		if err != nil {
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			duration = 60*time.Second
+		}
+
+		output, err := runShellTimeout(duration, "am", "start", flags, "-n", packageName+"/"+mainActivity)
+		if err != nil {
+			renderJSON(w, map[string]interface{}{
 				"success":      false,
 				"error":        err.Error(),
 				"output":       string(output),
 				"mainActivity": mainActivity,
 			})
 		} else {
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			renderJSON(w, map[string]interface{}{
 				"success":      true,
 				"mainActivity": mainActivity,
 				"output":       string(output),

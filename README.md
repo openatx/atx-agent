@@ -124,7 +124,7 @@ $ curl $DEVICE_URL/download/1
 ```
 
 ## uiautomator起停
-```
+```bash
 # 启动
 $ curl -X POST $DEVICE_URL/uiautomator
 Success
@@ -134,9 +134,21 @@ $ curl -X DELETE $DEVICE_URL/uiautomator
 Success
 ```
 
-## 获取包信息
+## 启动应用
+```bash
+# timeout 代表 am start -n 的超时时间
+# flags 默认为 -S -W
+$ http POST $DEVICE_URL/session/{com.cleanmaster.mguard_cn} timeout==10s flags=="-S"
+{
+    "mainActivity": "com.keniu.security.main.MainActivity",
+    "output": "Stopping: com.cleanmaster.mguard_cn\nStarting: Intent { cmp=com.cleanmaster.mguard_cn/com.keniu.security.main.MainActivity }\n",
+    "success": true
+}
 ```
-$ curl -XGET $DEVICE_URL/packages/{packageName}/info
+
+## 获取包信息
+```bash
+$ http GET $DEVICE_URL/packages/{packageName}/info
 {
     "success": true,
     "data": {

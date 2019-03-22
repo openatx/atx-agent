@@ -41,7 +41,7 @@ require (
 	github.com/qiniu/log v0.0.0-20140728010919-a304a74568d6
 	github.com/rs/cors v1.6.0
 	github.com/sevlyar/go-daemon v0.1.4
-	github.com/shogo82148/androidbinary v0.0.1
+	github.com/shogo82148/androidbinary v0.0.2-0.20190122102046-6d4ec43b2255
 	github.com/shurcooL/httpfs v0.0.0-20171119174359-809beceb2371
 	github.com/shurcooL/vfsgen v0.0.0-20181020040650-a97a25d856ca // indirect
 	github.com/sirupsen/logrus v1.1.1
