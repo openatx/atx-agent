@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -21,8 +22,9 @@ func newDnsSmartClient() *dnsSmartClient {
 	}
 }
 func (c *dnsSmartClient) Dial(ctx context.Context, network, address string) (conn net.Conn, err error) {
+	// net.dns1 might be ipv6, Issue https://github.com/openatx/atx-agent/issues/39
 	dns1 := getProperty("net.dns1")
-	if dns1 == "" {
+	if dns1 == "" || strings.Contains(dns1, ":") {
 		// 国内DNS列表: https://www.zhihu.com/question/32229915
 		dns1 = "114.114.114.114"
 	}
