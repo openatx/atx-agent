@@ -346,7 +346,7 @@ func (server *Server) initHTTPServer() {
 		if err == nil {
 			io.WriteString(w, "Success")
 		} else {
-			http.Error(w, err.Error(), 500)
+			io.WriteString(w, "Already stopped")
 		}
 	}).Methods("DELETE")
 
@@ -355,7 +355,7 @@ func (server *Server) initHTTPServer() {
 		renderJSON(w, map[string]interface{}{
 			"running": running,
 		})
-	})
+	}).Methods("GET")
 
 	m.HandleFunc("/raw/{filepath:.*}", func(w http.ResponseWriter, r *http.Request) {
 		filepath := mux.Vars(r)["filepath"]

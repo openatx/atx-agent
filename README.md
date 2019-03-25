@@ -132,6 +132,16 @@ Success
 # 停止
 $ curl -X DELETE $DEVICE_URL/uiautomator
 Success
+
+# 再次停止
+$ curl -X DELETE $DEVICE_URL/uiautomator
+Already stopped
+
+# 获取uiautomator状态
+$ curl $DEVICE/uiautomator
+{
+    "running": true
+}
 ```
 
 ## 启动应用
