@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"net/url"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -336,4 +337,44 @@ func copyToFile(rd io.Reader, dst string) error {
 	defer fd.Close()
 	_, err = io.Copy(fd, rd)
 	return err
+}
+
+// Get preferred outbound ip of this machine
+func GetOutboundIP() (net.IP, error) {
+    conn, err := net.Dial("udp", "8.8.8.8:80")
+    if err != nil {
+        return nil, err
+    }
+    defer conn.Close()
+
+    localAddr := conn.LocalAddr().(*net.UDPAddr)
+    return localAddr.IP, nil
+}
+
+// Generate Addr with http:// and ws://
+type NetAddr url.URL
+
+// NewNetAddr accept http://.... or example.com or 192.168.0.1:3000
+func NewNetAddr(addr string) *NetAddr {
+	// var host string
+	if !regexp.MustCompile(`^(http|ws)s?://`).MatchString(addr){
+		addr = "http://"+addr
+	}
+	u, err := url.Parse(addr)
+	if err != nil {
+		panic(err)
+	}
+	return (*NetAddr)(u)
+}
+
+func (n *NetAddr) HTTPAddr(paths ...string) string {
+	return n.Scheme + "://"+n.Host + strings.Join(paths, "")
+}
+
+func (n *NetAddr) WebSocketAddr(paths ...string) string {
+	scheme := "ws"
+	if n.Scheme == "https" {
+		scheme = "wss"
+	}
+	return scheme + "://"+n.Host+strings.Join(paths, "")
 }

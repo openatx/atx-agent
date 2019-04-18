@@ -12,6 +12,8 @@ import (
 	"github.com/codeskyblue/heartbeat"
 	"github.com/openatx/androidutils"
 	"github.com/openatx/atx-server/proto"
+	"github.com/gorilla/websocket"
+	"context"
 )
 
 var currentDeviceInfo *proto.DeviceInfo
@@ -74,19 +76,58 @@ type versionResponse struct {
 }
 
 type TunnelProxy struct {
-	ServerAddr string
+	ServerNetAddr *NetAddr
 	Secret     string
 
 	udid string
 }
 
+
+func (t *TunnelProxy) Heartbeat(){
+	if t.ServerNetAddr == nil {
+		return
+	}
+	targetUrl := t.ServerNetAddr.WebSocketAddr("/websocket/heartbeat")
+	c, _, err := websocket.DefaultDialer.DialContext(context.TODO(), targetUrl, nil)
+	if err != nil {
+		log.Printf("WebSocket dial error: %v", err)
+		return
+	}
+	defer c.Close()
+
+	ip, err := GetOutboundIP()
+	if err != nil {
+		log.Printf("OutboundIP: %v", ip)
+		return
+	}
+	c.WriteJSON(map[string]interface{}{
+		"command": "handshake",
+		"name": "atx-agent",
+		"owner": nil,
+		"secret": "",
+		"url": "http://"+ip.String()+":7912",
+		"priority": 1,
+	})
+	var resp struct {
+		Success bool `json:"success"`
+		ID string `json:"id"`
+		Description string `json:"description"`
+	}
+	c.ReadJSON(&resp)
+	if !resp.Success {
+		log.Println("HB handshake err:", resp.Description)
+		return
+	}
+	log.Println("HB ID:", resp.ID)
+}
+
 // Need test. Connect with server use github.com/codeskyblue/heartbeat
-func (t *TunnelProxy) Heratbeat() {
+func (t *TunnelProxy) Heartbeat_old() {
 	dinfo := getDeviceInfo()
 	t.udid = dinfo.Udid
 	client := &heartbeat.Client{
 		Secret:     t.Secret,
-		ServerAddr: "http://" + t.ServerAddr + "/heartbeat",
+		ServerAddr: t.ServerNetAddr.HTTPAddr("/heartbeat"),
 		Identifier: t.udid,
 	}
 	lostCnt := 0
@@ -111,7 +152,7 @@ func (t *TunnelProxy) Heratbeat() {
 }
 
 func (t *TunnelProxy) checkUpdate() error {
-	res, err := goreq.Request{Uri: "http://" + t.ServerAddr + "/version"}.Do()
+	res, err := goreq.Request{Uri: t.ServerNetAddr.HTTPAddr("/version")}.Do()
 	if err != nil {
 		return err
 	}
@@ -143,7 +184,7 @@ func (t *TunnelProxy) checkUpdate() error {
 func (t *TunnelProxy) UpdateInfo(devInfo *proto.DeviceInfo) error {
 	res, err := goreq.Request{
 		Method: "POST",
-		Uri:    "http://" + t.ServerAddr + "/devices/" + t.udid + "/info",
+		Uri:    t.ServerNetAddr.HTTPAddr("/devices/", t.udid, "/info"),
 		Body:   devInfo,
 	}.Do()
 	if err != nil {

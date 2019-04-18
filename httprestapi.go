@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"image/jpeg"
@@ -61,124 +60,124 @@ func (server *Server) initHTTPServer() {
 	})
 
 	/* WhatsInput */
-	var whatsinput = struct {
-		ChangeC  chan string
-		EditC    chan string
-		KeyCodeC chan int
-		Recent   string
-	}{make(chan string, 0), make(chan string, 0), make(chan int, 0), ""}
+	// var whatsinput = struct {
+	// 	ChangeC  chan string
+	// 	EditC    chan string
+	// 	KeyCodeC chan int
+	// 	Recent   string
+	// }{make(chan string, 0), make(chan string, 0), make(chan int, 0), ""}
 
-	const whatsInputFinishedMagic = "__inputFinished__"
+	// const whatsInputFinishedMagic = "__inputFinished__"
 
-	// simple pubsub system
-	m.HandleFunc("/whatsinput", func(w http.ResponseWriter, r *http.Request) {
-		host := r.Header.Get("Host")
-		log.Println("CONNECT", host)
-		conn, err := hijackHTTPRequest(w)
-		if err != nil {
-			log.Println("Hijack failed:", err)
-			return
-		}
-		quit := make(chan bool, 1)
-		go func() {
-			for {
-				select {
-				case text := <-whatsinput.EditC:
-					base64Str := base64.StdEncoding.EncodeToString([]byte(text)) + "\n"
-					conn.Write([]byte("I" + base64Str))
-				case keyCode := <-whatsinput.KeyCodeC:
-					conn.Write([]byte("K" + strconv.Itoa(keyCode)))
-				case <-time.After(10 * time.Second):
-					conn.Write([]byte("P")) // ping message
-				case <-quit:
-					return
-				}
-			}
-		}()
+	// // simple pubsub system
+	// m.HandleFunc("/whatsinput", func(w http.ResponseWriter, r *http.Request) {
+	// 	host := r.Header.Get("Host")
+	// 	log.Println("CONNECT", host)
+	// 	conn, err := hijackHTTPRequest(w)
+	// 	if err != nil {
+	// 		log.Println("Hijack failed:", err)
+	// 		return
+	// 	}
+	// 	quit := make(chan bool, 1)
+	// 	go func() {
+	// 		for {
+	// 			select {
+	// 			case text := <-whatsinput.EditC:
+	// 				base64Str := base64.StdEncoding.EncodeToString([]byte(text)) + "\n"
+	// 				conn.Write([]byte("I" + base64Str))
+	// 			case keyCode := <-whatsinput.KeyCodeC:
+	// 				conn.Write([]byte("K" + strconv.Itoa(keyCode)))
+	// 			case <-time.After(10 * time.Second):
+	// 				conn.Write([]byte("P")) // ping message
+	// 			case <-quit:
+	// 				return
+	// 			}
+	// 		}
+	// 	}()
 
-		buf := make([]byte, 4096)
-		for {
-			_, err := conn.Read(buf)
-			if err != nil {
-				quit <- true
-				break
-			}
-		}
-	}).Methods("CONNECT")
+	// 	buf := make([]byte, 4096)
+	// 	for {
+	// 		_, err := conn.Read(buf)
+	// 		if err != nil {
+	// 			quit <- true
+	// 			break
+	// 		}
+	// 	}
+	// }).Methods("CONNECT")
 
-	// Send input to device
-	// Highly affected by project https://github.com/willerce/WhatsInput
-	// Also thanks to https://github.com/senzhk/ADBKeyBoard
-	m.HandleFunc("/whatsinput", singleFightNewerWebsocket(func(w http.ResponseWriter, r *http.Request, ws *websocket.Conn) {
-		var v struct {
-			Type string `json:"type"`
-			Text string `json:"text,omitempty"`
-			Code int    `json:"code,omitempty"`
-		}
-		quit := make(chan bool, 1)
-		go func() {
-			for {
-				select {
-				case msg := <-whatsinput.ChangeC:
-					log.Println("Receive msg", msg)
-					if msg == whatsInputFinishedMagic {
-						log.Println("FinishedInput")
-						ws.WriteJSON(map[string]string{
-							"type": "InputFinish",
-						})
-					} else {
-						ws.WriteJSON(map[string]string{
-							"type": "InputStart",
-							"text": msg,
-						})
-					}
-				case <-quit:
-					return
-				}
-			}
-		}()
-		for {
-			if err := ws.ReadJSON(&v); err != nil {
-				quit <- true
-				log.Println(err)
-				break
-			}
-			switch v.Type {
-			case "InputEdit":
-				select {
-				case whatsinput.EditC <- v.Text:
-					log.Println("Message sended", v.Text)
-				case <-time.After(100 * time.Millisecond):
-				}
-				// runShell("am", "broadcast", "-a", "ADB_SET_TEXT", "--es", "text", strconv.Quote(base64Str))
-			case "InputKey":
-				runShell("input", "keyevent", "KEYCODE_ENTER") // HOTFIX(ssx): need fix later
-				// runShell("am", "broadcast", "-a", "ADB_INPUT_KEYCODE", "--ei", "code", strconv.Itoa(v.Code))
-			}
-		}
-	})).Methods("GET")
+	// // Send input to device
+	// // Highly affected by project https://github.com/willerce/WhatsInput
+	// // Also thanks to https://github.com/senzhk/ADBKeyBoard
+	// m.HandleFunc("/whatsinput", singleFightNewerWebsocket(func(w http.ResponseWriter, r *http.Request, ws *websocket.Conn) {
+	// 	var v struct {
+	// 		Type string `json:"type"`
+	// 		Text string `json:"text,omitempty"`
+	// 		Code int    `json:"code,omitempty"`
+	// 	}
+	// 	quit := make(chan bool, 1)
+	// 	go func() {
+	// 		for {
+	// 			select {
+	// 			case msg := <-whatsinput.ChangeC:
+	// 				log.Println("Receive msg", msg)
+	// 				if msg == whatsInputFinishedMagic {
+	// 					log.Println("FinishedInput")
+	// 					ws.WriteJSON(map[string]string{
+	// 						"type": "InputFinish",
+	// 					})
+	// 				} else {
+	// 					ws.WriteJSON(map[string]string{
+	// 						"type": "InputStart",
+	// 						"text": msg,
+	// 					})
+	// 				}
+	// 			case <-quit:
+	// 				return
+	// 			}
+	// 		}
+	// 	}()
+	// 	for {
+	// 		if err := ws.ReadJSON(&v); err != nil {
+	// 			quit <- true
+	// 			log.Println(err)
+	// 			break
+	// 		}
+	// 		switch v.Type {
+	// 		case "InputEdit":
+	// 			select {
+	// 			case whatsinput.EditC <- v.Text:
+	// 				log.Println("Message sended", v.Text)
+	// 			case <-time.After(100 * time.Millisecond):
+	// 			}
+	// 			// runShell("am", "broadcast", "-a", "ADB_SET_TEXT", "--es", "text", strconv.Quote(base64Str))
+	// 		case "InputKey":
+	// 			runShell("input", "keyevent", "KEYCODE_ENTER") // HOTFIX(ssx): need fix later
+	// 			// runShell("am", "broadcast", "-a", "ADB_INPUT_KEYCODE", "--ei", "code", strconv.Itoa(v.Code))
+	// 		}
+	// 	}
+	// })).Methods("GET")
 
-	m.HandleFunc("/whatsinput", func(w http.ResponseWriter, r *http.Request) {
-		data, _ := ioutil.ReadAll(r.Body)
-		if string(data) == "" {
-			http.Error(w, "Empty body", http.StatusForbidden)
-			return
-		}
-		var input string
-		if data[0] == 'I' {
-			input = string(data[1:])
-			whatsinput.Recent = input
-		} else {
-			input = whatsInputFinishedMagic
-			whatsinput.Recent = ""
-		}
-		select {
-		case whatsinput.ChangeC <- input:
-			io.WriteString(w, "Success")
-		case <-time.After(100 * time.Millisecond):
-			io.WriteString(w, "No WebSocket client connected")
-		}
-	}).Methods("POST")
+	// m.HandleFunc("/whatsinput", func(w http.ResponseWriter, r *http.Request) {
+	// 	data, _ := ioutil.ReadAll(r.Body)
+	// 	if string(data) == "" {
+	// 		http.Error(w, "Empty body", http.StatusForbidden)
+	// 		return
+	// 	}
+	// 	var input string
+	// 	if data[0] == 'I' {
+	// 		input = string(data[1:])
+	// 		whatsinput.Recent = input
+	// 	} else {
+	// 		input = whatsInputFinishedMagic
+	// 		whatsinput.Recent = ""
+	// 	}
+	// 	select {
+	// 	case whatsinput.ChangeC <- input:
+	// 		io.WriteString(w, "Success")
+	// 	case <-time.After(100 * time.Millisecond):
+	// 		io.WriteString(w, "No WebSocket client connected")
+	// 	}
+	// }).Methods("POST")
 
 	m.HandleFunc("/pidof/{pkgname}", func(w http.ResponseWriter, r *http.Request) {
 		pkgname := mux.Vars(r)["pkgname"]
@@ -211,7 +210,7 @@ func (server *Server) initHTTPServer() {
 		timeout := r.FormValue("timeout") // supported value: 60s, 1m. 60 is invalid
 		duration, err := time.ParseDuration(timeout)
 		if err != nil {
-			duration = 60*time.Second
+			duration = 60 * time.Second
 		}
 
 		output, err := runShellTimeout(duration, "am", "start", flags, "-n", packageName+"/"+mainActivity)

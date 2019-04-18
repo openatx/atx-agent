@@ -53,8 +53,8 @@ var (
 )
 
 const (
-	apkVersionCode = 4
-	apkVersionName = "1.0.4"
+	apkVersionCode = 1001007
+	apkVersionName = "1.1.7"
 )
 
 // singleFight for http request
@@ -445,7 +445,7 @@ func main() {
 	fStop := cmdServer.Flag("stop", "stop server").Bool()
 	cmdServer.Flag("port", "listen port").Default("7912").Short('p').IntVar(&listenPort) // Create on 2017/09/12
 	cmdServer.Flag("log", "log file path when in daemon mode").StringVar(&daemonLogPath)
-	fTunnelServer := cmdServer.Flag("server", "server url").Short('t').String()
+	fAtxServer := cmdServer.Flag("server", "server url").Short('t').String()
 	fNoUiautomator := cmdServer.Flag("nouia", "do not start uiautoamtor when start").Bool()
 
 	// CMD: version
@@ -568,15 +568,17 @@ func main() {
 	}
 
 	tunnel := &TunnelProxy{
-		ServerAddr: *fTunnelServer,
 		Secret:     "hello kitty",
 	}
-	if *fTunnelServer != "" {
-		devInfo.ServerURL = *fTunnelServer
+	if *fAtxServer != "" {
+		tunnel.ServerNetAddr = NewNetAddr(*fAtxServer)
+
+		devInfo.ServerURL = *fAtxServer
 		if !regexp.MustCompile(`https?://`).MatchString(devInfo.ServerURL) {
 			devInfo.ServerURL = "http://" + devInfo.ServerURL
 		}
-		go tunnel.Heratbeat()
+		log.Println("Heartbeat start")
+		go tunnel.Heartbeat()
 	}
 
 	server := NewServer(tunnel)
