@@ -20,3 +20,4 @@ testcmd/
 *.tmp/
 *.exe.old
 *.apk
+go.sum

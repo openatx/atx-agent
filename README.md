@@ -1,21 +1,19 @@
 # atx-agent
 [![Build Status](https://travis-ci.org/openatx/atx-agent.svg?branch=master)](https://travis-ci.org/openatx/atx-agent)
 
-HTTP Server runs on android device
+这个项目的主要目的是为了屏蔽不同安卓机器的差异，然后开放出统一的HTTP接口供 [openatx/uiautomator2](https://github.com/openatx/uiautomator2)使用。项目最终会发布成一个二进制程序，运行在Android系统的后台。
 
-`atx-agent`是一个在Android系统上运行的二进制程序，监控并维持uiautomator的运行，提供相应的HTTP接口与`python-uiautomator2`进行交互。
+这个项目是如何屏幕不同机器的差异的呢？举个例子来说，截图这个操作，大概需要3次判断才行。
 
-# Build
-需要Go版本 >= 1.11, 这个版本之后可以不用设置GOPATH变量了。
+1. 先判断minicap是否安装可用，然后minicap截图。毕竟minicap截图速度最快
+2. 使用uiautomator2提供的接口截图。（模拟器除外）
+3. 使用screencap截图，然后根据屏幕的旋转调整旋转方向。(一般只有模拟器用这种方式截图)
 
-```bash
-$ git clone https://github.com/openatx/atx-agent
-$ cd atx-agent
-$ go generate
-$ GOOS=linux GOARCH=arm go build -tags vfs
-```
+正是Android手机不同的表现形式，才导致了需要这么多的判断。而atx-agent就是为了将这些操作帮你处理了。然后提供统一的HTTP接口(GET /screenshot)供你使用。
 
-Note: 如果你的网络很差，可以尝试使用<https://goproxy.io> 使用方法很简单,直接导入一个环境变量就可以了 `export GOPROXY=https://goproxy.io`
+# Develop
+这个项目是用Go语言写成的。编译的时候的需要你有一点Go语言的基础。
+更多内容查看 [DEVELOP.md](DEVELOP.md)
 
 # Installation
 从<https://github.com/openatx/atx-agent/releases>下载以`linux_armv7.tar.gz`结尾的二进制包。绝大部分手机都是linux-arm架构的。
