@@ -59,6 +59,29 @@ $ curl $DEVICE_URL/info
 }
 ```
 
+## 获取Hierarchy
+这个接口目前比较高级，当跟uiautomator通信失败的时候，它会在后台启动uiautomator这个服务，等它恢复正常了，在返回数据。
+
+```bash
+$ curl $DEVICE_URL/dump/hierarchy
+{
+    "jsonrpc":"2.0",
+    "id":1559113464,
+    "result": "<?xml version='1.0> ... hierarchy ..."
+}
+
+# 停止掉uiautomator
+$ curl -X DELETE $DEVICE_URL/uiautomator
+Success
+
+# 再次调用, 依然OK，只是可能要等个7~8s
+$ curl $DEVICE_URL/dump/hierarchy
+{
+    "jsonrpc": "2.0",
+    ...
+}
+```
+
 ## 安装应用
 ```bash
 $ curl -X POST -d url="http://some-host/some.apk" $DEVICE_URL/install
@@ -274,41 +297,6 @@ Websocket连接 `$DEVICE_URL/minitouch`, 一行行的按照JSON的格式写入
     {"operation": "c"}
     ```
 
-## Whatsinput交互协议
-感谢 项目<https://github.com/willerce/WhatsInput>
-
-Websocket连接 `$DEVICE_URL/whatsinput`, 接收JSON格式
-
-### 手机 --> 前端
-- 设置文本框内容
-
-    ```json
-    {"text":"hello world", "type":"InputStart"}
-    ```
-
-    开始编辑时的内容
-
-- 结束编辑
-
-    ```json
-    {"type": "InputFinish"}
-    ```
-
-### 前端 --> 手机
-- KeyCode的输入
-
-    ```json
-    {"type": "InputKey", "code": 66}
-    ```
-
-    [KeyCode参考列表](https://testerhome.com/topics/1386)
-
-- 编辑框内容输入
-
-    ```json
-    {"type": "InputEdit", "text": "some text"}
-    ```
-
 # TODO
 1. 目前安全性还是个问题，以后再想办法改善
 2. 补全接口文档
@@ -316,19 +304,6 @@ Websocket连接 `$DEVICE_URL/whatsinput`, 接收JSON格式
 
 # Logs
 log path `/sdcard/atx-agent.log`
-
-# Build from source
-```bash
-GOOS=linux GOARCH=arm go build
-```
-
-with html resource buildin
-
-```bash
-go get github.com/shurcooL/vfsgen
-go generate
-go build -tags vfs
-```
 
 ## TODO
 - [ ] 使用支持多线程下载的库 https://github.com/cavaliercoder/grab

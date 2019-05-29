@@ -21,6 +21,7 @@ export GOPROXY=https://goproxy.io
 export GO111MODULE=on
 
 # 将assets目录下的文件打包成go代码
+go get -v github.com/shurcooL/vfsgen # 不执行这个好像也没关系
 go generate
 
 # build for android binary
