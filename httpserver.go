@@ -64,12 +64,13 @@ func (server *Server) initHTTPServer() {
 	// jsonrpc client to call uiautomator
 	rpcc := jsonrpc.NewClient("http://127.0.0.1:9008/jsonrpc/0")
 	rpcc.ErrorCallback = func() error {
-		if !service.Running("uiautomator") {
-			service.Start("uiautomator")
-		}
+		service.Restart("uiautomator")
+		// if !service.Running("uiautomator") {
+		// 	service.Start("uiautomator")
+		// }
 		return nil
 	}
-	rpcc.ErrorFixTimeout = 20 * time.Second
+	rpcc.ErrorFixTimeout = 40 * time.Second
 	rpcc.ServerOK = func() bool {
 		return service.Running("uiautomator")
 	}
