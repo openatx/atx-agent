@@ -516,7 +516,12 @@ func (server *Server) initHTTPServer() {
 	// deprecated
 	m.HandleFunc("/install", func(w http.ResponseWriter, r *http.Request) {
 		var url = r.FormValue("url")
-		filepath := TempFileName("/sdcard/tmp", ".apk")
+		var tmpdir = r.FormValue("tmpdir")
+		if tmpdir == "" {
+			tmpdir = "/data/local/tmp"
+		}
+
+		filepath := TempFileName(tmpdir, ".apk")
 		key := background.HTTPDownload(url, filepath, 0644)
 		go func() {
 			defer os.Remove(filepath) // release sdcard space
