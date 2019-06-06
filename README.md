@@ -106,6 +106,64 @@ $ curl -X POST -d command="pwd" $DEVICE_URL/shell
 }
 ```
 
+## App信息获取
+```bash
+# 获取所有运行的应用
+$ curl $DEVICE_URL/proc/list
+[
+    {
+        "cmdline": ["/system/bin/adbd", "--root_seclabel=u:r:su:s0"],
+        "name": "adbd",
+        "pid": 16177
+    },
+    {
+        "cmdline": ["com.netease.cloudmusic"],
+        "name": "com.netease.cloudmusic",
+        "pid": 15532
+    }
+]
+
+# 获取应用的内存信息(数据仅供参考)，单位KB，total代表应用的PSS
+$ curl $DEVICE_URL/proc/com.netease.cloudmusic/meminfo
+{
+    "code": 17236,
+    "graphics": 20740,
+    "java heap": 22288,
+    "native heap": 20576,
+    "private other": 10632,
+    "stack": 48,
+    "system": 110925,
+    "total": 202445,
+    "total swap pss": 88534
+}
+
+# 获取应用以及其所有子进程的内存数据
+$ curl $DEVICE_URL/proc/com.netease.cloudmusic/meminfo/all
+{
+    "com.netease.cloudmusic": {
+        "code": 15952,
+        "graphics": 19328,
+        "java heap": 45488,
+        "native heap": 20840,
+        "private other": 4056,
+        "stack": 956,
+        "system": 18652,
+        "total": 125272
+    },
+    "com.netease.cloudmusic:browser": {
+        "code": 848,
+        "graphics": 12,
+        "java heap": 6580,
+        "native heap": 5428,
+        "private other": 1592,
+        "stack": 336,
+        "system": 10603,
+        "total": 25399
+    }
+}
+```
+
+
 ## 下载文件
 ```bash
 $ curl $DEVICE_URL/raw/sdcard/tmp.txt

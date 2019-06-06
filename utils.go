@@ -171,6 +171,38 @@ func newFakeWriter(f func([]byte) (int, error)) *fakeWriter {
 	}
 }
 
+type ProcInfo struct {
+	Pid     int      `json:"pid"`
+	Cmdline []string `json:"cmdline"`
+	Name    string   `json:"name"`
+}
+
+func listAllProcs() (ps []ProcInfo, err error) {
+	fs, err := procfs.NewFS(procfs.DefaultMountPoint)
+	if err != nil {
+		return
+	}
+	procs, err := fs.AllProcs()
+	if err != nil {
+		return
+	}
+	for _, p := range procs {
+		cmdline, _ := p.CmdLine()
+		var name string
+		if len(cmdline) == 1 {
+			name = cmdline[0] // get package name
+		} else {
+			name, _ = p.Comm()
+		}
+		ps = append(ps, ProcInfo{
+			Pid:     p.PID,
+			Cmdline: cmdline,
+			Name:    name,
+		})
+	}
+	return
+}
+
 // pidof
 func pidOf(packageName string) (pid int, err error) {
 	fs, err := procfs.NewFS(procfs.DefaultMountPoint)
@@ -336,4 +368,44 @@ func copyToFile(rd io.Reader, dst string) error {
 	defer fd.Close()
 	_, err = io.Copy(fd, rd)
 	return err
+}
+
+// parse output: dumpsys meminfo --local ${pkgname}
+// If everything is going, returns json, unit KB
+// {
+//     "code": 58548,
+//     "graphics": 73068,
+//     "java heap": 160332,
+//     "native heap": 67708,
+//     "private Other": 34976,
+//     "stack": 4728,
+//     "system": 8288,
+//     "total": 407648
+// }
+func parseMemoryInfo(nameOrPid string) (info map[string]int, err error) {
+	output, err := Command{
+		Args:    []string{"dumpsys", "meminfo", "--local", nameOrPid},
+		Timeout: 10 * time.Second,
+	}.CombinedOutputString()
+	if err != nil {
+		return
+	}
+	index := strings.Index(output, "App Summary")
+	if index == -1 {
+		err = errors.New("dumpsys meminfo has no [App Summary]")
+		return
+	}
+	re := regexp.MustCompile(`(\w[\w ]+):\s*(\d+)`)
+	matches := re.FindAllStringSubmatch(output[index:], -1)
+	if len(matches) == 0 {
+		err = errors.New("Invalid dumpsys meminfo output")
+		return
+	}
+	info = make(map[string]int, len(matches))
+	for _, m := range matches {
+		key := strings.ToLower(m[1])
+		val, _ := strconv.Atoi(m[2])
+		info[key] = val
+	}
+	return
 }

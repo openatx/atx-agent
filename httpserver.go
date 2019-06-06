@@ -87,12 +87,57 @@ func (server *Server) initHTTPServer() {
 		renderJSON(w, resp)
 	})
 
-	m.HandleFunc("/pidof/{pkgname}", func(w http.ResponseWriter, r *http.Request) {
-		pkgname := mux.Vars(r)["pkgname"]
-		if pid, err := pidOf(pkgname); err == nil {
-			io.WriteString(w, strconv.Itoa(pid))
+	m.HandleFunc("/proc/list", func(w http.ResponseWriter, r *http.Request) {
+		ps, err := listAllProcs()
+		if err != nil {
+			http.Error(w, err.Error(), 500)
 			return
 		}
+		renderJSON(w, ps)
+	})
+
+	m.HandleFunc("/proc/{pkgname}/meminfo", func(w http.ResponseWriter, r *http.Request) {
+		pkgname := mux.Vars(r)["pkgname"]
+		info, err := parseMemoryInfo(pkgname)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		renderJSON(w, info)
+	})
+
+	m.HandleFunc("/proc/{pkgname}/meminfo/all", func(w http.ResponseWriter, r *http.Request) {
+		pkgname := mux.Vars(r)["pkgname"]
+		ps, err := listAllProcs()
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+
+		mems := make(map[string]map[string]int, 0)
+		for _, p := range ps {
+			if len(p.Cmdline) != 1 {
+				continue
+			}
+			if p.Name == pkgname || strings.HasPrefix(p.Name, pkgname+":") {
+				info, err := parseMemoryInfo(p.Name)
+				if err != nil {
+					continue
+				}
+				mems[p.Name] = info
+			}
+		}
+		renderJSON(w, mems)
+	})
+
+	m.HandleFunc("/pidof/{pkgname}", func(w http.ResponseWriter, r *http.Request) {
+		pkgname := mux.Vars(r)["pkgname"]
+		pid, err := pidOf(pkgname)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusGone)
+			return
+		}
+		io.WriteString(w, strconv.Itoa(pid))
 	})
 
 	m.HandleFunc("/session/{pkgname}", func(w http.ResponseWriter, r *http.Request) {
@@ -339,7 +384,10 @@ func (server *Server) initHTTPServer() {
 
 		// APK Service will send rotation to atx-agent when rotation changes
 		runShellTimeout(5*time.Second, "am", "startservice", "--user", "0", "-n", "com.github.uiautomator/.Service")
-		fmt.Fprintf(w, "rotation change to %d", deviceRotation)
+		renderJSON(w, map[string]int{
+			"rotation": deviceRotation,
+		})
+		// fmt.Fprintf(w, "rotation change to %d", deviceRotation)
 	})
 
 	/*

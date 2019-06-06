@@ -11,16 +11,15 @@ import (
 	"github.com/codeskyblue/goreq"
 	"github.com/codeskyblue/heartbeat"
 	"github.com/openatx/androidutils"
-	"github.com/openatx/atx-server/proto"
 )
 
-var currentDeviceInfo *proto.DeviceInfo
+var currentDeviceInfo *DeviceInfo
 
-func getDeviceInfo() *proto.DeviceInfo {
+func getDeviceInfo() *DeviceInfo {
 	if currentDeviceInfo != nil {
 		return currentDeviceInfo
 	}
-	devInfo := &proto.DeviceInfo{
+	devInfo := &DeviceInfo{
 		Serial:       getCachedProperty("ro.serialno"),
 		Brand:        getCachedProperty("ro.product.brand"),
 		Model:        getCachedProperty("ro.product.model"),
@@ -42,7 +41,7 @@ func getDeviceInfo() *proto.DeviceInfo {
 	} else {
 		total := memory["MemTotal"]
 		around := int(math.Ceil(float64(total-512*1024) / 1024.0 / 1024.0)) // around GB
-		devInfo.Memory = &proto.MemoryInfo{
+		devInfo.Memory = &MemoryInfo{
 			Total:  total,
 			Around: fmt.Sprintf("%d GB", around),
 		}
@@ -52,7 +51,7 @@ func getDeviceInfo() *proto.DeviceInfo {
 	if err != nil {
 		log.Println("get cpuinfo error:", err)
 	} else {
-		devInfo.Cpu = &proto.CpuInfo{
+		devInfo.Cpu = &CpuInfo{
 			Hardware: hardware,
 			Cores:    len(processors),
 		}
@@ -140,7 +139,7 @@ func (t *TunnelProxy) checkUpdate() error {
 	return nil
 }
 
-func (t *TunnelProxy) UpdateInfo(devInfo *proto.DeviceInfo) error {
+func (t *TunnelProxy) UpdateInfo(devInfo *DeviceInfo) error {
 	res, err := goreq.Request{
 		Method: "POST",
 		Uri:    "http://" + t.ServerAddr + "/devices/" + t.udid + "/info",
