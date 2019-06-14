@@ -23,13 +23,13 @@ import (
 
 	"github.com/openatx/atx-agent/jsonrpc"
 
-	"github.com/codeskyblue/procfs"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/mholt/archiver"
 	"github.com/openatx/androidutils"
 	"github.com/openatx/atx-agent/cmdctrl"
+	"github.com/prometheus/procfs"
 	"github.com/rs/cors"
 )
 
@@ -128,6 +128,22 @@ func (server *Server) initHTTPServer() {
 			}
 		}
 		renderJSON(w, mems)
+	})
+
+	// make(map[int][]int)
+	m.HandleFunc("/proc/{pkgname}/cpuinfo", func(w http.ResponseWriter, r *http.Request) {
+		pkgname := mux.Vars(r)["pkgname"]
+		pid, err := pidOf(pkgname)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusGone)
+			return
+		}
+		info, err := readCPUInfo(pid)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		renderJSON(w, info)
 	})
 
 	m.HandleFunc("/pidof/{pkgname}", func(w http.ResponseWriter, r *http.Request) {

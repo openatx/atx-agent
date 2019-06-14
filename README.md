@@ -163,6 +163,25 @@ $ curl $DEVICE_URL/proc/com.netease.cloudmusic/meminfo/all
 }
 ```
 
+# 获取CPU信息
+
+如果进程是多线程运行的话，且机器是多核的，返回的CPU Percent可能会大于100%
+
+```bash
+curl $DEVICE_URL/proc/<package or pid>/cpuinfo
+# success return
+{
+    "pid": 1122,
+    "user": 288138,
+    "system": 73457,
+    "percent": 50.0,
+    "systemPercent": 88.372,
+    "coreCount": 4,
+}
+# failure return
+410 Gone, Or 500 Internal error
+```
+
 
 ## 下载文件
 ```bash

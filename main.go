@@ -10,6 +10,7 @@ import (
 	"html/template"
 	"io"
 	"io/ioutil"
+	syslog "log"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -56,6 +57,10 @@ const (
 	apkVersionCode = 4
 	apkVersionName = "1.0.4"
 )
+
+func init() {
+	syslog.SetFlags(syslog.Lshortfile | syslog.LstdFlags)
+}
 
 // singleFight for http request
 // - minicap

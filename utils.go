@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"image"
 	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -20,10 +21,10 @@ import (
 	"time"
 
 	"github.com/codeskyblue/goreq"
-	"github.com/codeskyblue/procfs"
 	shellquote "github.com/kballard/go-shellquote"
 	"github.com/openatx/androidutils"
 	"github.com/pkg/errors"
+	"github.com/prometheus/procfs"
 	"github.com/shogo82148/androidbinary/apk"
 )
 
@@ -172,9 +173,11 @@ func newFakeWriter(f func([]byte) (int, error)) *fakeWriter {
 }
 
 type ProcInfo struct {
-	Pid     int      `json:"pid"`
-	Cmdline []string `json:"cmdline"`
-	Name    string   `json:"name"`
+	Pid        int      `json:"pid"`
+	PPid       int      `json:"ppid"`
+	NumThreads int      `json:"threadCount"`
+	Cmdline    []string `json:"cmdline"`
+	Name       string   `json:"name"`
 }
 
 func listAllProcs() (ps []ProcInfo, err error) {
@@ -194,10 +197,13 @@ func listAllProcs() (ps []ProcInfo, err error) {
 		} else {
 			name, _ = p.Comm()
 		}
+		stat, _ := p.Stat()
 		ps = append(ps, ProcInfo{
-			Pid:     p.PID,
-			Cmdline: cmdline,
-			Name:    name,
+			Pid:        p.PID,
+			PPid:       stat.PPID,
+			Cmdline:    cmdline,
+			Name:       name,
+			NumThreads: stat.NumThreads,
 		})
 	}
 	return
@@ -207,6 +213,12 @@ func listAllProcs() (ps []ProcInfo, err error) {
 func pidOf(packageName string) (pid int, err error) {
 	fs, err := procfs.NewFS(procfs.DefaultMountPoint)
 	if err != nil {
+		return
+	}
+	// when packageName is int
+	pid, er := strconv.Atoi(packageName)
+	if er == nil {
+		_, err = fs.NewProc(pid)
 		return
 	}
 	procs, err := fs.AllProcs()
@@ -407,5 +419,149 @@ func parseMemoryInfo(nameOrPid string) (info map[string]int, err error) {
 		val, _ := strconv.Atoi(m[2])
 		info[key] = val
 	}
+	return
+}
+
+type CPUStat struct {
+	Pid         int
+	SystemTotal uint
+	SystemIdle  uint
+	ProcUser    uint
+	ProcSystem  uint
+	UpdateTime  time.Time
+}
+
+func NewCPUStat(pid int) (stat *CPUStat, err error) {
+	stat = &CPUStat{Pid: pid}
+	err = stat.Update()
+	return
+}
+
+func (c *CPUStat) String() string {
+	return fmt.Sprintf("CPUStat(pid:%d, systotal:%d, sysidle:%d, user:%d, system:%d",
+		c.Pid, c.SystemTotal, c.SystemIdle, c.ProcUser, c.ProcSystem)
+}
+
+// CPUPercent may > 100.0 if process have multi thread on multi cores
+func (c *CPUStat) CPUPercent(last *CPUStat) float64 {
+	pjiff1 := last.ProcUser + last.ProcSystem
+	pjiff2 := c.ProcUser + c.ProcSystem
+	duration := c.SystemTotal - last.SystemTotal
+	if duration <= 0 {
+		return 0.0
+	}
+	percent := 100.0 * float64(pjiff2-pjiff1) / float64(duration)
+	if percent < 0.0 {
+		log.Println("Warning: cpu percent < 0", percent)
+		percent = 0
+	}
+	return percent
+}
+
+func (c *CPUStat) SystemCPUPercent(last *CPUStat) float64 {
+	idle := c.SystemIdle - last.SystemIdle
+	jiff := c.SystemTotal - last.SystemTotal
+	percent := 100.0 * float64(idle) / float64(jiff)
+	return percent
+}
+
+// Update proc jiffies data
+func (c *CPUStat) Update() error {
+	// retrive /proc/<pid>/stat
+	fs, err := procfs.NewFS(procfs.DefaultMountPoint)
+	if err != nil {
+		return err
+	}
+	proc, err := fs.NewProc(c.Pid)
+	if err != nil {
+		return err
+	}
+	stat, err := proc.NewStat()
+	if err != nil {
+		return errors.Wrap(err, "read /proc/<pid>/stat")
+	}
+
+	// retrive /proc/stst
+	statData, err := ioutil.ReadFile("/proc/stat")
+	if err != nil {
+		return errors.Wrap(err, "read /proc/stat")
+	}
+	procStat := string(statData)
+	idx := strings.Index(procStat, "\n")
+	// cpuName, user, nice, system, idle, iowait, irq, softIrq, steal, guest, guestNice
+	fields := strings.Fields(procStat[:idx])
+	if fields[0] != "cpu" {
+		return errors.New("/proc/stat not startswith cpu")
+	}
+	var total, idle uint
+	for i, raw := range fields[1:] {
+		var v uint
+		fmt.Sscanf(raw, "%d", &v)
+		if i == 3 { // idle
+			idle = v
+		}
+		total += v
+	}
+
+	c.ProcSystem = stat.STime
+	c.ProcUser = stat.UTime
+	c.SystemTotal = total
+	c.SystemIdle = idle
+	c.UpdateTime = time.Now()
+	return nil
+}
+
+var cpuStats = make(map[int]*CPUStat)
+
+var _cpuCoreCount int
+
+// CPUCoreCount return 0 if retrive failed
+func CPUCoreCount() int {
+	if _cpuCoreCount != 0 {
+		return _cpuCoreCount
+	}
+	fs, err := procfs.NewFS(procfs.DefaultMountPoint)
+	if err != nil {
+		return 0
+	}
+	stat, err := fs.NewStat()
+	if err != nil {
+		return 0
+	}
+	_cpuCoreCount = len(stat.CPU)
+	return _cpuCoreCount
+}
+
+type CPUInfo struct {
+	Pid           int     `json:"pid"`
+	User          uint    `json:"user"`
+	System        uint    `json:"system"`
+	Percent       float64 `json:"percent"`
+	SystemPercent float64 `json:"systemPercent"`
+	CoreCount     int     `json:"coreCount"`
+}
+
+func readCPUInfo(pid int) (info CPUInfo, err error) {
+	last, ok := cpuStats[pid]
+	if !ok || // need fresh history data
+		last.UpdateTime.Add(5*time.Second).Before(time.Now()) {
+		last, err = NewCPUStat(pid)
+		if err != nil {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+		log.Println("Update data")
+	}
+	stat, err := NewCPUStat(pid)
+	if err != nil {
+		return
+	}
+	cpuStats[pid] = stat
+	info.Pid = pid
+	info.User = stat.ProcUser
+	info.System = stat.ProcSystem
+	info.Percent = stat.CPUPercent(last)
+	info.SystemPercent = stat.SystemCPUPercent(last)
+	info.CoreCount = CPUCoreCount()
 	return
 }
