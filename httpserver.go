@@ -78,6 +78,20 @@ func (server *Server) initHTTPServer() {
 	// robust communicate with uiautomator
 	// If the service is down, restart it and wait it recover
 	m.HandleFunc("/dump/hierarchy", func(w http.ResponseWriter, r *http.Request) {
+		if !service.Running("uiautomator") {
+			xmlContent, err := dumpHierarchy()
+			if err != nil {
+				log.Println("Err:", err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			renderJSON(w, map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      1,
+				"result":  xmlContent,
+			})
+			return
+		}
 		resp, err := rpcc.RobustCall("dumpWindowHierarchy", false) // false: no compress
 		if err != nil {
 			log.Println("Err:", err)

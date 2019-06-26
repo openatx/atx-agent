@@ -565,3 +565,17 @@ func readCPUInfo(pid int) (info CPUInfo, err error) {
 	info.CoreCount = CPUCoreCount()
 	return
 }
+
+func dumpHierarchy() (xmlContent string, err error) {
+	const targetPath = "/sdcard/window_dump.xml"
+	c := &Command{
+		Args:  []string{"uiautomator", "dump", targetPath},
+		Shell: true,
+	}
+	if err = c.Run(); err != nil {
+		return
+	}
+	data, err := ioutil.ReadFile(targetPath)
+	xmlContent = string(data)
+	return
+}

@@ -66,11 +66,12 @@ type Client struct {
 func NewClient(url string) *Client {
 	return &Client{
 		URL:     url,
-		Timeout: 10 * time.Second,
+		Timeout: 60 * time.Second,
 	}
 }
 
 func (r *Client) Call(method string, params ...interface{}) (resp *Response, err error) {
+	// timeout maybe no needed
 	gres, err := grequests.Post(r.URL, &grequests.RequestOptions{
 		RequestTimeout: r.Timeout,
 		JSON:           NewRequest(method, params...),
