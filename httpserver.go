@@ -561,9 +561,22 @@ func (server *Server) initHTTPServer() {
 		json.NewEncoder(w).Encode(state)
 	}).Methods("GET")
 
+	m.HandleFunc("/packages", func(w http.ResponseWriter, r *http.Request) {
+		pkgs, err := listPackages()
+		if err != nil {
+			w.WriteHeader(500)
+			renderJSON(w, map[string]interface{}{
+				"success":     false,
+				"description": err.Error(),
+			})
+			return
+		}
+		renderJSON(w, pkgs)
+	}).Methods("GET")
+
 	m.HandleFunc("/packages/{pkgname}/info", func(w http.ResponseWriter, r *http.Request) {
 		pkgname := mux.Vars(r)["pkgname"]
-		info, err := pkgInfo(pkgname)
+		info, err := readPackageInfo(pkgname)
 		if err != nil {
 			renderJSON(w, map[string]interface{}{
 				"success":     false,
@@ -579,7 +592,7 @@ func (server *Server) initHTTPServer() {
 
 	m.HandleFunc("/packages/{pkgname}/icon", func(w http.ResponseWriter, r *http.Request) {
 		pkgname := mux.Vars(r)["pkgname"]
-		info, err := pkgInfo(pkgname)
+		info, err := readPackageInfo(pkgname)
 		if err != nil {
 			http.Error(w, "package not found", 403)
 			return

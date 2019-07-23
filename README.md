@@ -278,6 +278,34 @@ $ curl -XGET $DEVICE_URL/packages/{packageName}/icon
 # 失败的情况 status code != 200
 ```
 
+## 获取所有包的信息
+该接口速度有点慢，大约需要3s。
+
+原理是通过`pm list packages -3 -f`获取包的信息，然后在用`androidbinary`库对包进行解析
+
+```bash
+$ http GET $DEVICE_URL/packages
+[
+    {
+        "packageName": "com.github.uiautomator",
+        "mainActivity": "com.github.uiautomator.MainActivity",
+        "label": "ATX",
+        "versionName": "1.1.7-2-361182f-dirty",
+        "versionCode": 1001007,
+        "size": 1639366
+    },
+    {
+        "packageName": "com.smartisanos.payment",
+        "mainActivity": "",
+        "label": "",
+        "versionName": "1.1",
+        "versionCode": 1,
+        "size": 3910826
+    },
+    ...
+]
+```
+
 ## 程序自升级(暂时不能用了)
 升级程序从gihub releases里面直接下载，升级完后自动重启
 

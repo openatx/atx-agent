@@ -50,6 +50,12 @@ type Command struct {
 	Stderr     io.Writer
 }
 
+func NewCommand(args ...string) *Command {
+	return &Command{
+		Args: args,
+	}
+}
+
 func (c *Command) shellPath() string {
 	sh := os.Getenv("SHELL")
 	if sh == "" {
@@ -235,6 +241,7 @@ func pidOf(packageName string) (pid int, err error) {
 }
 
 type PackageInfo struct {
+	PackageName  string      `json:"packageName"`
 	MainActivity string      `json:"mainActivity"`
 	Label        string      `json:"label"`
 	VersionName  string      `json:"versionName"`
@@ -243,7 +250,7 @@ type PackageInfo struct {
 	Icon         image.Image `json:"-"`
 }
 
-func pkgInfo(packageName string) (info PackageInfo, err error) {
+func readPackageInfo(packageName string) (info PackageInfo, err error) {
 	outbyte, err := runShell("pm", "path", packageName)
 	output := strings.TrimSpace(string(outbyte))
 	if !strings.HasPrefix(output, "package:") {
@@ -251,6 +258,10 @@ func pkgInfo(packageName string) (info PackageInfo, err error) {
 		return
 	}
 	apkpath := output[len("package:"):]
+	return readPackageInfoFromPath(apkpath)
+}
+
+func readPackageInfoFromPath(apkpath string) (info PackageInfo, err error) {
 	finfo, err := os.Stat(apkpath)
 	if err != nil {
 		return
@@ -258,9 +269,10 @@ func pkgInfo(packageName string) (info PackageInfo, err error) {
 	info.Size = finfo.Size()
 	pkg, err := apk.OpenFile(apkpath)
 	if err != nil {
-		err = errors.Wrap(err, packageName)
+		err = errors.Wrap(err, apkpath)
 		return
 	}
+	info.PackageName = pkg.PackageName()
 	info.Label, _ = pkg.Label(nil)
 	info.MainActivity, _ = pkg.MainActivity()
 	info.Icon, _ = pkg.Icon(nil)
@@ -577,5 +589,32 @@ func dumpHierarchy() (xmlContent string, err error) {
 	}
 	data, err := ioutil.ReadFile(targetPath)
 	xmlContent = string(data)
+	return
+}
+
+func listPackages() (pkgs []PackageInfo, err error) {
+	c := NewCommand("pm", "list", "packages", "-f", "-3")
+	c.Shell = true
+	output, err := c.CombinedOutputString()
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(output, "\n") {
+		if !strings.HasPrefix(line, "package:") {
+			continue
+		}
+		matches := regexp.MustCompile(`^package:(/.+)=([^=]+)$`).FindStringSubmatch(line)
+		if len(matches) == 0 {
+			continue
+		}
+		pkgPath := matches[1]
+		pkgName := matches[2]
+		pkgInfo, er := readPackageInfoFromPath(pkgPath)
+		if er != nil {
+			log.Printf("Read package %s error %v", pkgName, er)
+			continue
+		}
+		pkgs = append(pkgs, pkgInfo)
+	}
 	return
 }
