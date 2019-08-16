@@ -375,15 +375,15 @@ func (server *Server) initHTTPServer() {
 
 	m.HandleFunc("/info/revise", func(w http.ResponseWriter, r *http.Request) {
 		apkServiceTimer.Reset(apkServiceTimeout)
-		max, ok := r.URL.Query()["max"]
-		if !ok || len(max) < 1 {
+		max := r.URL.Query().Get("max")
+		if max == "" {
 			if displayMaxWidthHeight == 800 {
 				displayMaxWidthHeight = 1280
 			} else {
 				displayMaxWidthHeight = 800
 			}
 		} else {
-			maxWidthHeight, err := strconv.Atoi(max[0])
+			maxWidthHeight, err := strconv.Atoi(max)
 			if err == nil {
 				displayMaxWidthHeight = maxWidthHeight
 			} else {
