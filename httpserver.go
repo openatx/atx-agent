@@ -373,6 +373,57 @@ func (server *Server) initHTTPServer() {
 		io.WriteString(w, "Success")
 	}).Methods("POST")
 
+	m.HandleFunc("/info/revise", func(w http.ResponseWriter, r *http.Request) {
+		apkServiceTimer.Reset(apkServiceTimeout)
+		max, ok := r.URL.Query()["max"]
+		if !ok || len(max) < 1 {
+			if displayMaxWidthHeight == 800 {
+				displayMaxWidthHeight = 1280
+			} else {
+				displayMaxWidthHeight = 800
+			}
+		} else {
+			maxWidthHeight, err := strconv.Atoi(max[0])
+			if err == nil {
+				displayMaxWidthHeight = maxWidthHeight
+			} else {
+				renderJSON(w, map[string]string{
+					"maxWidthHeight": "parameter error",
+				})
+				return
+			}
+		}
+		// copy form codeskyblue
+		// Kill not controled minicap
+		killed := false
+		procWalk(func(proc procfs.Proc) {
+			executable, _ := proc.Executable()
+			if filepath.Base(executable) != "minicap" {
+				return
+			}
+			stat, err := proc.NewStat()
+			if err != nil || stat.PPID != 1 { // only not controled minicap need killed
+				return
+			}
+			if p, err := os.FindProcess(proc.PID); err == nil {
+				log.Println("Kill", executable)
+				p.Kill()
+				killed = true
+			}
+		})
+		if killed {
+			service.Start("minicap")
+		}
+		updateMinicapRotation(deviceRotation)
+
+		// APK Service will send rotation to atx-agent when rotation changes
+		runShellTimeout(5*time.Second, "am", "startservice", "--user", "0", "-n", "com.github.uiautomator/.Service")
+		renderJSON(w, map[string]int{
+			"maxWidthHeight": displayMaxWidthHeight,
+		})
+		// fmt.Fprintf(w, "rotation change to %d", deviceRotation)
+	})
+
 	m.HandleFunc("/info/rotation", func(w http.ResponseWriter, r *http.Request) {
 		apkServiceTimer.Reset(apkServiceTimeout)
 		var direction int                                 // 0,1,2,3
