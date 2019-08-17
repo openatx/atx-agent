@@ -232,7 +232,7 @@ func Screenshot(filename string, thumbnailSize string) (err error) {
 		"LD_LIBRARY_PATH=/data/local/tmp",
 		"/data/local/tmp/minicap",
 		"-P", fmt.Sprintf("%dx%d@%s/%d", f.Width, f.Height, thumbnailSize, f.Rotation),
-		"-Q", "100,
+		"-Q", "100",
 		"-s", ">"+filename); err != nil {
 		return
 	}
