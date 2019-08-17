@@ -397,7 +397,7 @@ func (server *Server) initHTTPServer() {
 		if q != "" {
 			qua, err := strconv.Atoi(q)
 			if err == nil {
-				if qua >= 0 || qua <= 100 {
+				if qua >= 0 && qua <= 100 {
 					quality = qua
 				} else {
 					quality = 80
