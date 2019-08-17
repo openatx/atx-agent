@@ -432,7 +432,7 @@ func (server *Server) initHTTPServer() {
 			}
 		} else {
 			maxWidthHeight, err := strconv.Atoi(max)
-			if err == nil {
+			if err == nil && maxWidthHeight > 0 {
 				displayMaxWidthHeight = maxWidthHeight
 			} else {
 				renderJSON(w, map[string]string{
