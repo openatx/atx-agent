@@ -376,6 +376,7 @@ func (server *Server) initHTTPServer() {
 	m.HandleFunc("/info/revise", func(w http.ResponseWriter, r *http.Request) {
 		apkServiceTimer.Reset(apkServiceTimeout)
 		max := r.URL.Query().Get("max")
+		q := r.URL.Query().Get("max")
 		if max == "" {
 			if displayMaxWidthHeight == 800 {
 				displayMaxWidthHeight = 1280
@@ -388,7 +389,22 @@ func (server *Server) initHTTPServer() {
 				displayMaxWidthHeight = maxWidthHeight
 			} else {
 				renderJSON(w, map[string]string{
-					"maxWidthHeight": "parameter error",
+					"maxWidthHeight": "maxWidthHeight error",
+				})
+				return
+			}
+		}
+		if q != "" {
+			qua, err := strconv.Atoi(q)
+			if err == nil {
+				if qua >= 0 || qua <= 100 {
+					quality = qua
+				} else {
+					quality = 80
+				}
+			} else {
+				renderJSON(w, map[string]string{
+					"quality": "quality error",
 				})
 				return
 			}
@@ -420,6 +436,7 @@ func (server *Server) initHTTPServer() {
 		runShellTimeout(5*time.Second, "am", "startservice", "--user", "0", "-n", "com.github.uiautomator/.Service")
 		renderJSON(w, map[string]int{
 			"maxWidthHeight": displayMaxWidthHeight,
+			"quality": quality,
 		})
 		// fmt.Fprintf(w, "rotation change to %d", deviceRotation)
 	})
