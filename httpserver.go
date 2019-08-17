@@ -376,7 +376,7 @@ func (server *Server) initHTTPServer() {
 	m.HandleFunc("/info/revise", func(w http.ResponseWriter, r *http.Request) {
 		apkServiceTimer.Reset(apkServiceTimeout)
 		max := r.URL.Query().Get("max")
-		q := r.URL.Query().Get("max")
+		q := r.URL.Query().Get("q")
 		if max == "" {
 			if displayMaxWidthHeight == 800 {
 				displayMaxWidthHeight = 1280
