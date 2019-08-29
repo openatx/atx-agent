@@ -272,6 +272,8 @@ func readPackageInfoFromPath(apkpath string) (info PackageInfo, err error) {
 		err = errors.Wrap(err, apkpath)
 		return
 	}
+	defer pkg.Close()
+
 	info.PackageName = pkg.PackageName()
 	info.Label, _ = pkg.Label(nil)
 	info.MainActivity, _ = pkg.MainActivity()
