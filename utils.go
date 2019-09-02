@@ -278,8 +278,8 @@ func readPackageInfoFromPath(apkpath string) (info PackageInfo, err error) {
 	info.Label, _ = pkg.Label(nil)
 	info.MainActivity, _ = pkg.MainActivity()
 	info.Icon, _ = pkg.Icon(nil)
-	info.VersionCode = pkg.Manifest().VersionCode
-	info.VersionName = pkg.Manifest().VersionName
+	info.VersionCode = int(pkg.Manifest().VersionCode.MustInt32())
+	info.VersionName = pkg.Manifest().VersionName.MustString()
 	return
 }
 

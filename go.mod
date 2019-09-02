@@ -27,7 +27,7 @@ require (
 	github.com/kardianos/osext v0.0.0-20170510131534-ae77be60afb1 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/kr/binarydist v0.1.0 // indirect
-	github.com/kr/pty v1.1.1
+	github.com/kr/pty v1.1.8
 	github.com/levigross/grequests v0.0.0-20190130132859-37c80f76a0da
 	github.com/mholt/archiver v2.0.1-0.20171012052341-26cf5bb32d07+incompatible
 	github.com/mitchellh/ioprogress v0.0.0-20180201004757-6a23b12fa88e
@@ -42,13 +42,18 @@ require (
 	github.com/qiniu/log v0.0.0-20140728010919-a304a74568d6
 	github.com/rs/cors v1.6.0
 	github.com/sevlyar/go-daemon v0.1.4
-	github.com/shogo82148/androidbinary v0.0.2-0.20190122102046-6d4ec43b2255
+	github.com/shogo82148/androidbinary v1.0.1
 	github.com/sirupsen/logrus v1.1.1
-	github.com/stretchr/testify v1.3.0
+	github.com/stretchr/objx v0.2.0 // indirect
+	github.com/stretchr/testify v1.4.0
 	github.com/ulikunitz/xz v0.5.5 // indirect
 	golang.org/x/crypto v0.0.0-20181112202954-3d3f9f413869 // indirect
 	golang.org/x/net v0.0.0-20181114220301-adae6a3d119a // indirect
 	golang.org/x/sys v0.0.0-20181121002834-0cf1ed9e522b // indirect
+	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 )
 
-replace github.com/prometheus/procfs v0.0.2 => github.com/codeskyblue/procfs v0.0.0-20190614074311-71434f4ee4b7
+replace (
+	github.com/prometheus/procfs v0.0.2 => github.com/codeskyblue/procfs v0.0.0-20190614074311-71434f4ee4b7
+	golang.org/x/net v0.0.0-20181114220301-adae6a3d119a => github.com/golang/net v0.0.0-20181114220301-adae6a3d119a
+)
