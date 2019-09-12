@@ -215,6 +215,20 @@ func listAllProcs() (ps []ProcInfo, err error) {
 	return
 }
 
+func findProcAll(packageName string) (procList []procfs.Proc, err error) {
+	procs, err := procfs.AllProcs()
+	for _, proc := range procs {
+		cmdline, _ := proc.CmdLine()
+		if len(cmdline) != 1 {
+			continue
+		}
+		if cmdline[0] == packageName || strings.HasPrefix(cmdline[0], packageName+":") {
+			procList = append(procList, proc)
+		}
+	}
+	return
+}
+
 // pidof
 func pidOf(packageName string) (pid int, err error) {
 	fs, err := procfs.NewFS(procfs.DefaultMountPoint)

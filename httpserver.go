@@ -160,6 +160,45 @@ func (server *Server) initHTTPServer() {
 		renderJSON(w, info)
 	})
 
+	// list all webview paths
+	// ref:
+	m.HandleFunc("/proc/{pkgname}/webview", func(w http.ResponseWriter, r *http.Request) {
+		packageName := mux.Vars(r)["pkgname"]
+		netUnix, err := procfs.NewNetUnix()
+		if err != nil {
+			return
+		}
+
+		unixPaths := make(map[string]bool, 0)
+		for _, row := range netUnix.Rows {
+			if !strings.HasPrefix(row.Path, "@") {
+				continue
+			}
+			if !strings.Contains(row.Path, "devtools_remote") {
+				continue
+			}
+			unixPaths[row.Path[1:]] = true
+		}
+
+		result := make([]interface{}, 0)
+		procs, err := findProcAll(packageName)
+		for _, proc := range procs {
+			cmdline, _ := proc.CmdLine()
+			suffix := "_" + strconv.Itoa(proc.PID)
+
+			for socketPath := range unixPaths {
+				if strings.HasSuffix(socketPath, suffix) {
+					result = append(result, map[string]interface{}{
+						"pid":        proc.PID,
+						"name":       cmdline[0],
+						"socketPath": socketPath,
+					})
+				}
+			}
+		}
+		renderJSON(w, result)
+	})
+
 	m.HandleFunc("/pidof/{pkgname}", func(w http.ResponseWriter, r *http.Request) {
 		pkgname := mux.Vars(r)["pkgname"]
 		pid, err := pidOf(pkgname)
