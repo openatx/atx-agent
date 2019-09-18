@@ -34,14 +34,12 @@ import (
 )
 
 type Server struct {
-	tunnel     *TunnelProxy
+	// tunnel     *TunnelProxy
 	httpServer *http.Server
 }
 
-func NewServer(tunnel *TunnelProxy) *Server {
-	server := &Server{
-		tunnel: tunnel,
-	}
+func NewServer() *Server {
+	server := &Server{}
 	server.initHTTPServer()
 	return server
 }
@@ -405,10 +403,10 @@ func (server *Server) initHTTPServer() {
 	m.HandleFunc("/info/battery", func(w http.ResponseWriter, r *http.Request) {
 		apkServiceTimer.Reset(apkServiceTimeout)
 		deviceInfo.Battery.Update()
-		if err := server.tunnel.UpdateInfo(deviceInfo); err != nil {
-			io.WriteString(w, "Failure "+err.Error())
-			return
-		}
+		// if err := server.tunnel.UpdateInfo(deviceInfo); err != nil {
+		// 	io.WriteString(w, "Failure "+err.Error())
+		// 	return
+		// }
 		io.WriteString(w, "Success")
 	}).Methods("POST")
 

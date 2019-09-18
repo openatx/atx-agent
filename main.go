@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -450,7 +451,7 @@ func main() {
 	fStop := cmdServer.Flag("stop", "stop server").Bool()
 	cmdServer.Flag("port", "listen port").Default("7912").Short('p').IntVar(&listenPort) // Create on 2017/09/12
 	cmdServer.Flag("log", "log file path when in daemon mode").StringVar(&daemonLogPath)
-	fTunnelServer := cmdServer.Flag("server", "server url").Short('t').String()
+	fServerURL := cmdServer.Flag("server", "server url").Short('t').String()
 	fNoUiautomator := cmdServer.Flag("nouia", "do not start uiautoamtor when start").Bool()
 
 	// CMD: version
@@ -501,6 +502,20 @@ func main() {
 	// 		return
 	// 	}
 	// }
+
+	serverURL := *fServerURL
+	if serverURL != "" {
+		if !regexp.MustCompile(`https?://`).MatchString(serverURL) {
+			serverURL = "http://" + serverURL
+		}
+		u, err := url.Parse(serverURL)
+		if err != nil {
+			log.Fatal(err)
+		}
+		_ = u
+		// New
+		// u.Host
+	}
 
 	if _, err := os.Stat("/sdcard/tmp"); err != nil {
 		os.MkdirAll("/sdcard/tmp", 0755)
@@ -572,19 +587,17 @@ func main() {
 		}
 	}
 
-	tunnel := &TunnelProxy{
-		ServerAddr: *fTunnelServer,
-		Secret:     "hello kitty",
-	}
-	if *fTunnelServer != "" {
-		devInfo.ServerURL = *fTunnelServer
-		if !regexp.MustCompile(`https?://`).MatchString(devInfo.ServerURL) {
-			devInfo.ServerURL = "http://" + devInfo.ServerURL
-		}
-		go tunnel.Heratbeat()
-	}
+	// tunnel := &TunnelProxy{
+	// 	ServerAddr: *fTunnelServer,
+	// 	Secret:     "hello kitty",
+	// }
+	// if *fTunnelServer != "" {
+	// 	devInfo.ServerURL = *fTunnelServer
 
-	server := NewServer(tunnel)
+	// 	go tunnel.Heratbeat()
+	// }
+
+	server := NewServer()
 
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
