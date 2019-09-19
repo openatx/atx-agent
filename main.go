@@ -299,11 +299,18 @@ var (
 
 	// target, _ := url.Parse("http://127.0.0.1:9008")
 	// uiautomatorProxy := httputil.NewSingleHostReverseProxy(target)
+
+	uiautomatorTimer = NewSafeTimer(time.Minute * 3)
+
 	uiautomatorProxy = &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
 			req.URL.RawQuery = "" // ignore http query
 			req.URL.Scheme = "http"
 			req.URL.Host = "127.0.0.1:9008"
+
+			if req.URL.Path == "/jsonrpc/0" {
+				uiautomatorTimer.Reset()
+			}
 		},
 		Transport: &http.Transport{
 			// Ref: https://golang.org/pkg/net/http/#RoundTripper
@@ -572,15 +579,26 @@ func main() {
 		MaxRetries:      3,
 		RecoverDuration: 30 * time.Second,
 		OnStart: func() error {
+			uiautomatorTimer.Reset()
 			log.Println("service uiautomator: startservice com.github.uiautomator/.Service")
 			runShell("am", "startservice", "-n", "com.github.uiautomator/.Service")
 			return nil
 		},
 		OnStop: func() {
+			uiautomatorTimer.Stop()
 			log.Println("service uiautomator: stopservice com.github.uiautomator/.Service")
 			runShell("am", "stopservice", "-n", "com.github.uiautomator/.Service")
 		},
 	})
+
+	// stop uiautomator when 3 minutes not requests
+	go func() {
+		for range uiautomatorTimer.C {
+			log.Println("uiautomator has not activity for 3 minutes, closed")
+			service.Stop("uiautomator")
+		}
+	}()
+
 	if !*fNoUiautomator {
 		if err := service.Start("uiautomator"); err != nil {
 			log.Println("uiautomator start failed:", err)

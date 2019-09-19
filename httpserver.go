@@ -254,12 +254,7 @@ func (server *Server) initHTTPServer() {
 		pkgname := mux.Vars(r)["pkgname"]
 		pid, _ := strconv.Atoi(mux.Vars(r)["pid"])
 
-		pfs, err := procfs.NewFS(procfs.DefaultMountPoint)
-		if err != nil {
-			http.Error(w, err.Error(), 500)
-			return
-		}
-		proc, err := pfs.NewProc(pid)
+		proc, err := procfs.NewProc(pid)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusGone) // 410
 			return

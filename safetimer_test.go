@@ -1,5 +1,3 @@
-// +build windows
-
 package main
 
 import (
@@ -25,6 +23,48 @@ func TestSafeTimer(tt *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestSafeTimerUsage(tt *testing.T) {
+	t := NewSafeTimer(500 * time.Millisecond)
+	done := make(chan bool, 1)
+	go func() {
+		for range t.C {
+			done <- true
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		tt.Fatal("Should accept signal, but got nothing")
+	}
+
+	t.Reset()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		tt.Fatal("Should accept signal, but got nothing")
+	}
+
+	t.Reset()
+	t.Reset()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		tt.Fatal("Should accept signal, but got nothing")
+	}
+	select {
+	case <-done:
+		tt.Fatal("Should accept nothing, because already accept someting")
+	case <-time.After(time.Second):
+	}
+
+	t.Stop()
+	select {
+	case <-done:
+		tt.Fatal("Should not accept for timer already stopped")
+	case <-time.After(time.Second):
+	}
 }
 
 // func TestMustPanic(tt *testing.T) {
