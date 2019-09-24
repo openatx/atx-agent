@@ -349,7 +349,9 @@ func (server *Server) initHTTPServer() {
 	m.HandleFunc("/uiautomator", func(w http.ResponseWriter, r *http.Request) {
 		err := service.Start("uiautomator")
 		if err == nil {
-			io.WriteString(w, "Success")
+			io.WriteString(w, "Successfully started")
+		} else if err == cmdctrl.ErrAlreadyRunning {
+			io.WriteString(w, "Already started")
 		} else {
 			http.Error(w, err.Error(), 500)
 		}
@@ -358,9 +360,11 @@ func (server *Server) initHTTPServer() {
 	m.HandleFunc("/uiautomator", func(w http.ResponseWriter, r *http.Request) {
 		err := service.Stop("uiautomator", true) // wait until program quit
 		if err == nil {
-			io.WriteString(w, "Success")
-		} else {
+			io.WriteString(w, "Successfully stopped")
+		} else if err == cmdctrl.ErrAlreadyStopped {
 			io.WriteString(w, "Already stopped")
+		} else {
+			http.Error(w, err.Error(), 500)
 		}
 	}).Methods("DELETE")
 
