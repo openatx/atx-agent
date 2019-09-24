@@ -578,6 +578,7 @@ func main() {
 		Stderr:          os.Stderr,
 		MaxRetries:      3,
 		RecoverDuration: 30 * time.Second,
+		StopSignal:      os.Interrupt,
 		OnStart: func() error {
 			uiautomatorTimer.Reset()
 			log.Println("service uiautomator: startservice com.github.uiautomator/.Service")
@@ -588,6 +589,7 @@ func main() {
 			uiautomatorTimer.Stop()
 			log.Println("service uiautomator: stopservice com.github.uiautomator/.Service")
 			runShell("am", "stopservice", "-n", "com.github.uiautomator/.Service")
+			runShell("am", "force-stop", "com.github.uiautomator")
 		},
 	})
 

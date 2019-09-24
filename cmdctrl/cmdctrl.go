@@ -42,6 +42,7 @@ type CommandInfo struct {
 	MaxRetries      int           // 3
 	NextLaunchWait  time.Duration // 0.5s
 	RecoverDuration time.Duration // 30s
+	StopSignal      os.Signal
 
 	OnStart func() error // if return non nil, cmd will not run
 	OnStop  func()
@@ -81,6 +82,9 @@ func (cc *CommandCtrl) Add(name string, c CommandInfo) error {
 	}
 	if c.NextLaunchWait == 0 {
 		c.NextLaunchWait = 500 * time.Millisecond
+	}
+	if c.StopSignal == nil {
+		c.StopSignal = syscall.SIGTERM
 	}
 
 	cc.rl.Lock()
@@ -271,7 +275,7 @@ func (p *processKeeper) terminate(cmdC chan error) {
 		return
 	}
 	if p.cmd.Process != nil {
-		p.cmd.Process.Signal(syscall.SIGTERM)
+		p.cmd.Process.Signal(p.cmdInfo.StopSignal)
 	}
 	terminateWait := 3 * time.Second
 	select {
