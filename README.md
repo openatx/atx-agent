@@ -331,6 +331,18 @@ $ curl -XPUT 10.0.0.1:7912/minicap
 $ curl -XPUT 10.0.0.1:7912/minitouch
 ```
 
+## 修改 minicap 虚拟分辨率
+
+可以指定 max 参数修改虚拟屏幕最大像素，未指定时在 800 和 1280 间切换；q 参数可以指定质量
+
+```bash
+# no parameter
+$ curl -XPUT 10.0.0.1:7912/info/revise
+
+# add parameter
+$ curl -XPUT 10.0.0.1:7912/info/revise?max=720&q=80
+```
+
 ## 视频录制(不推荐用)
 开始录制
 

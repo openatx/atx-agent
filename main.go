@@ -185,13 +185,23 @@ type MinicapInfo struct {
 var (
 	deviceRotation        int
 	displayMaxWidthHeight = 800
+	quality = 80
 )
 
 func updateMinicapRotation(rotation int) {
 	devInfo := getDeviceInfo()
 	width, height := devInfo.Display.Width, devInfo.Display.Height
+	if width >= height {
+		if displayMaxWidthHeight > width {
+			displayMaxWidthHeight = 800
+		}
+	} else {
+		if displayMaxWidthHeight > height {
+			displayMaxWidthHeight = 800
+		}
+	}
 	service.UpdateArgs("minicap", "/data/local/tmp/minicap", "-S", "-P",
-		fmt.Sprintf("%dx%d@%dx%d/%d", width, height, displayMaxWidthHeight, displayMaxWidthHeight, rotation))
+		fmt.Sprintf("%dx%d@%dx%d/%d", width, height, displayMaxWidthHeight, displayMaxWidthHeight, rotation), "-Q", strconv.Itoa(quality))
 }
 
 func checkUiautomatorInstalled() (ok bool) {
@@ -223,6 +233,7 @@ func Screenshot(filename string, thumbnailSize string) (err error) {
 		"LD_LIBRARY_PATH=/data/local/tmp",
 		"/data/local/tmp/minicap",
 		"-P", fmt.Sprintf("%dx%d@%s/%d", f.Width, f.Height, thumbnailSize, f.Rotation),
+		"-Q", "100",
 		"-s", ">"+filename); err != nil {
 		return
 	}
@@ -562,7 +573,7 @@ func main() {
 	service.Add("minicap", cmdctrl.CommandInfo{
 		Environ: []string{"LD_LIBRARY_PATH=/data/local/tmp"},
 		Args: []string{"/data/local/tmp/minicap", "-S", "-P",
-			fmt.Sprintf("%dx%d@%dx%d/0", width, height, displayMaxWidthHeight, displayMaxWidthHeight)},
+			fmt.Sprintf("%dx%d@%dx%d/0", width, height, displayMaxWidthHeight, displayMaxWidthHeight), "-Q", strconv.Itoa(quality)},
 	})
 	service.Add("minitouch", cmdctrl.CommandInfo{
 		Args: []string{"/data/local/tmp/minitouch"},
