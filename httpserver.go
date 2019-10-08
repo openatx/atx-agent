@@ -995,19 +995,43 @@ func (server *Server) initHTTPServer() {
 			w.Header().Set("Content-Disposition", "attachment; filename="+download)
 		}
 
-		if r.FormValue("minicap") == "false" || strings.ToLower(getCachedProperty("ro.product.manufacturer")) == "meizu" {
+		thumbnailSize := r.FormValue("thumbnail")
+		filename := nextScreenshotFilename()
+
+		// android emulator use screencap
+		// then minicap when binary and .so exists
+		// then uiautomator when service(uiautomator) is running
+		// last screencap
+
+		method := "screencap"
+		if getCachedProperty("ro.product.cpu.abi") == "x86" { // android emulator
+			method = "screencap"
+		} else if fileExists("/data/local/tmp/minicap") && fileExists("/data/local/tmp/minicap.so") && r.FormValue("minicap") != "false" && strings.ToLower(getCachedProperty("ro.product.manufacturer")) != "meizu" {
+			method = "minicap"
+		} else if service.Running("uiautomator") {
+			method = "uiautomator"
+		}
+
+		var err error
+		switch method {
+		case "screencap":
+			err = screenshotWithScreencap(filename)
+		case "minicap":
+			err = screenshotWithMinicap(filename, thumbnailSize)
+		case "uiautomator":
 			uiautomatorProxy.ServeHTTP(w, r)
 			return
 		}
-		thumbnailSize := r.FormValue("thumbnail")
-		filename := nextScreenshotFilename()
-		if err := Screenshot(filename, thumbnailSize); err != nil {
-			log.Printf("screenshot[minicap] error: %v", err)
-			uiautomatorProxy.ServeHTTP(w, r)
-		} else {
-			w.Header().Set("X-Screenshot-Method", "minicap")
-			http.ServeFile(w, r, filename)
+		if err != nil && method != "screencap" {
+			method = "screencap"
+			err = screenshotWithScreencap(filename)
 		}
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.Header().Set("X-Screenshot-Method", method)
+		http.ServeFile(w, r, filename)
 	})
 
 	m.HandleFunc("/wlan/ip", func(w http.ResponseWriter, r *http.Request) {

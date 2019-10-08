@@ -206,29 +206,6 @@ func checkUiautomatorInstalled() (ok bool) {
 	return err == nil
 }
 
-func Screenshot(filename string, thumbnailSize string) (err error) {
-	output, err := runShellOutput("LD_LIBRARY_PATH=/data/local/tmp", "/data/local/tmp/minicap", "-i")
-	if err != nil {
-		return
-	}
-	var f MinicapInfo
-	if er := json.Unmarshal([]byte(output), &f); er != nil {
-		err = fmt.Errorf("minicap not supported: %v", er)
-		return
-	}
-	if thumbnailSize == "" {
-		thumbnailSize = fmt.Sprintf("%dx%d", f.Width, f.Height)
-	}
-	if _, err = runShell(
-		"LD_LIBRARY_PATH=/data/local/tmp",
-		"/data/local/tmp/minicap",
-		"-P", fmt.Sprintf("%dx%d@%s/%d", f.Width, f.Height, thumbnailSize, f.Rotation),
-		"-s", ">"+filename); err != nil {
-		return
-	}
-	return nil
-}
-
 type DownloadManager struct {
 	db map[string]*downloadProxy
 	mu sync.Mutex
@@ -574,6 +551,8 @@ func main() {
 			"-e", "debug", "false",
 			"-e", "class", "com.github.uiautomator.stub.Stub",
 			"com.github.uiautomator.test/android.support.test.runner.AndroidJUnitRunner"},
+		// Args: []string{"sh", "-c", "uiautomator runtest uiautomator-stub.jar bundle.jar -c com.github.uiautomatorstub.Stub"},
+		// Args: []string{"uiautomator", "runtest", "/data/local/tmp/uiautomator-stub.jar", "bundle.jar","-c", "com.github.uiautomatorstub.Stub"},
 		Stdout:          os.Stdout,
 		Stderr:          os.Stderr,
 		MaxRetries:      3,
