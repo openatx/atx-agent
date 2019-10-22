@@ -346,6 +346,75 @@ func (server *Server) initHTTPServer() {
 		}()
 	})
 
+	m.HandleFunc("/services/{name}", func(w http.ResponseWriter, r *http.Request) {
+		name := mux.Vars(r)["name"]
+		var resp map[string]interface{}
+		if !service.Exists(name) {
+			w.WriteHeader(400) // bad request
+			renderJSON(w, map[string]interface{}{
+				"success":     false,
+				"description": fmt.Sprintf("service %s does not exist", strconv.Quote(name)),
+			})
+			return
+		}
+		switch r.Method {
+		case "GET":
+			resp = map[string]interface{}{
+				"success": true,
+				"running": service.Running(name),
+			}
+		case "POST":
+			err := service.Start(name)
+			switch err {
+			case nil:
+				resp = map[string]interface{}{
+					"success":     true,
+					"description": "successfully started",
+				}
+			case cmdctrl.ErrAlreadyRunning:
+				resp = map[string]interface{}{
+					"success":     true,
+					"description": "already started",
+				}
+			default:
+				resp = map[string]interface{}{
+					"success":     false,
+					"description": "failure on start: " + err.Error(),
+				}
+			}
+		case "DELETE":
+			err := service.Stop(name)
+			switch err {
+			case nil:
+				resp = map[string]interface{}{
+					"success":     true,
+					"description": "successfully stopped",
+				}
+			case cmdctrl.ErrAlreadyStopped:
+				resp = map[string]interface{}{
+					"success":     true,
+					"description": "already stopped",
+				}
+			default:
+				resp = map[string]interface{}{
+					"success":     false,
+					"description": "failure on stop: " + err.Error(),
+				}
+			}
+		default:
+			resp = map[string]interface{}{
+				"success":     false,
+				"description": "invalid request method: " + r.Method,
+			}
+		}
+		if ok, success := resp["success"].(bool); ok {
+			if !success {
+				w.WriteHeader(400) // bad request
+			}
+		}
+		renderJSON(w, resp)
+	}).Methods("GET", "POST", "DELETE")
+
 	m.HandleFunc("/uiautomator", func(w http.ResponseWriter, r *http.Request) {
 		err := service.Start("uiautomator")
 		if err == nil {

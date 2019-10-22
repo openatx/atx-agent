@@ -545,14 +545,31 @@ func main() {
 		Args: []string{"/data/local/tmp/minitouch"},
 	})
 
-	// uiautomator
+	// uiautomator 1.0
+	service.Add("uiautomator-1.0", cmdctrl.CommandInfo{
+		Args: []string{"sh", "-c",
+			"uiautomator runtest uiautomator-stub.jar bundle.jar -c com.github.uiautomatorstub.Stub"},
+		// Args: []string{"uiautomator", "runtest", "/data/local/tmp/uiautomator-stub.jar", "bundle.jar","-c", "com.github.uiautomatorstub.Stub"},
+		Stdout:          os.Stdout,
+		Stderr:          os.Stderr,
+		MaxRetries:      3,
+		RecoverDuration: 30 * time.Second,
+		StopSignal:      os.Interrupt,
+		OnStart: func() error {
+			uiautomatorTimer.Reset()
+			return nil
+		},
+		OnStop: func() {
+			uiautomatorTimer.Stop()
+		},
+	})
+
+	// uiautomator 2.0
 	service.Add("uiautomator", cmdctrl.CommandInfo{
 		Args: []string{"am", "instrument", "-w", "-r",
 			"-e", "debug", "false",
 			"-e", "class", "com.github.uiautomator.stub.Stub",
 			"com.github.uiautomator.test/android.support.test.runner.AndroidJUnitRunner"},
-		// Args: []string{"sh", "-c", "uiautomator runtest uiautomator-stub.jar bundle.jar -c com.github.uiautomatorstub.Stub"},
-		// Args: []string{"uiautomator", "runtest", "/data/local/tmp/uiautomator-stub.jar", "bundle.jar","-c", "com.github.uiautomatorstub.Stub"},
 		Stdout:          os.Stdout,
 		Stderr:          os.Stderr,
 		MaxRetries:      3,
@@ -577,6 +594,7 @@ func main() {
 		for range uiautomatorTimer.C {
 			log.Println("uiautomator has not activity for 3 minutes, closed")
 			service.Stop("uiautomator")
+			service.Stop("uiautomator-1.0")
 		}
 	}()
 
