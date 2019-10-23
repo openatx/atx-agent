@@ -203,6 +203,34 @@ $ curl -F "file=@somefile.txt" $DEVICE_URL/upload/sdcard/tmp.txt
 $ curl -F file=@some.zip -F dir=true $DEVICE_URL/upload/sdcard/
 ```
 
+## 获取文件和目录信息
+```bash
+# 文件
+$ curl -X GET $DEVICE_URL/finfo/data/local/tmp/tmp.txt
+{
+	"name": "tmp.txt",
+	"path": "/data/local/tmp/tmp.txt",
+	"isDirectory": false,
+	"size": 15232,
+}
+
+# 目录
+$ curl -X GET $DEVICE_URL/finfo/data/local/tmp
+{
+	"name": "tmp",
+	"path": "/data/local/tmp",
+	"isDirectory": true,
+	"size": 8192,
+	"files": [
+		{
+			"name": "tmp.txt", 
+			"path": "/data/local/tmp/tmp.txt"
+			"isDirectory": false,
+		}
+	]
+}
+```
+
 相当于将`some.zip`上传到手机，然后执行`unzip some.zip -d /sdcard`, 最后将`some.zip`删除
 
 ## 离线下载

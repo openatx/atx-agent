@@ -445,8 +445,42 @@ func (server *Server) initHTTPServer() {
 	}).Methods("GET")
 
 	m.HandleFunc("/raw/{filepath:.*}", func(w http.ResponseWriter, r *http.Request) {
-		filepath := mux.Vars(r)["filepath"]
+		filepath := "/" + mux.Vars(r)["filepath"]
 		http.ServeFile(w, r, filepath)
+	})
+
+	m.HandleFunc("/finfo/{lpath:.*}", func(w http.ResponseWriter, r *http.Request) {
+		lpath := "/" + mux.Vars(r)["lpath"]
+		finfo, err := os.Stat(lpath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				http.Error(w, err.Error(), 404)
+			} else {
+				http.Error(w, err.Error(), 403) // forbidden
+			}
+			return
+		}
+		data := make(map[string]interface{}, 5)
+		data["name"] = finfo.Name()
+		data["path"] = lpath
+		data["isDirectory"] = finfo.IsDir()
+		data["size"] = finfo.Size()
+
+		if finfo.IsDir() {
+			files, err := ioutil.ReadDir(lpath)
+			if err == nil {
+				finfos := make([]map[string]interface{}, 0, 3)
+				for _, f := range files {
+					finfos = append(finfos, map[string]interface{}{
+						"name":        f.Name(),
+						"path":        filepath.Join(lpath, f.Name()),
+						"isDirectory": f.IsDir(),
+					})
+				}
+				data["files"] = finfos
+			}
+		}
+		renderJSON(w, data)
 	})
 
 	// keep ApkService always running
