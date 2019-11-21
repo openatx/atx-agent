@@ -604,16 +604,6 @@ func main() {
 		}
 	}
 
-	// tunnel := &TunnelProxy{
-	// 	ServerAddr: *fTunnelServer,
-	// 	Secret:     "hello kitty",
-	// }
-	// if *fTunnelServer != "" {
-	// 	devInfo.ServerURL = *fTunnelServer
-
-	// 	go tunnel.Heratbeat()
-	// }
-
 	server := NewServer()
 
 	sigc := make(chan os.Signal, 1)

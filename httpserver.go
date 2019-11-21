@@ -73,6 +73,21 @@ func (server *Server) initHTTPServer() {
 		return service.Running("uiautomator")
 	}
 
+	m.HandleFunc("/newCommandTimeout", func(w http.ResponseWriter, r *http.Request) {
+		var timeout int
+		err := json.NewDecoder(r.Body).Decode(&timeout) // TODO: auto get rotation
+		if err != nil {
+			http.Error(w, "Empty payload", 400) // bad request
+			return
+		}
+		cmdTimeout := time.Duration(timeout) * time.Second
+		uiautomatorTimer.Reset(cmdTimeout)
+		renderJSON(w, map[string]interface{}{
+			"success":     true,
+			"description": fmt.Sprintf("newCommandTimeout updated to %v", cmdTimeout),
+		})
+	}).Methods("POST")
+
 	// robust communicate with uiautomator
 	// If the service is down, restart it and wait it recover
 	m.HandleFunc("/dump/hierarchy", func(w http.ResponseWriter, r *http.Request) {

@@ -334,6 +334,15 @@ $ http GET $DEVICE_URL/packages
 ]
 ```
 
+## 调整uiautomator自动停止时间 （默认3分钟）
+```bash
+$ curl -X POST 10.0.0.1:7912/newCommandTimeout --data 300
+{
+    "success": true,
+    "description":"newCommandTimeout updated to 5m0s"
+}
+```
+
 ## 程序自升级(暂时不能用了)
 升级程序从gihub releases里面直接下载，升级完后自动重启
 
