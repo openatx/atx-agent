@@ -6,7 +6,6 @@ require (
 	github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc // indirect
 	github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf // indirect
 	github.com/codeskyblue/goreq v0.0.0-20180831024223-49450746aaef
-	github.com/codeskyblue/heartbeat v0.1.0
 	github.com/dsnet/compress v0.0.0-20171208185109-cc9eb1d7ad76 // indirect
 	github.com/franela/goblin v0.0.0-20181003173013-ead4ad1d2727 // indirect
 	github.com/franela/goreq v0.0.0-20171204163338-bcd34c9993f8
@@ -34,7 +33,6 @@ require (
 	github.com/nwaples/rardecode v1.0.0 // indirect
 	github.com/onsi/gomega v1.5.0 // indirect
 	github.com/openatx/androidutils v1.0.0
-	github.com/openatx/atx-server v0.0.0-20181121094919-899e3078125e
 	github.com/oxtoacart/bpool v0.0.0-20150712133111-4e1c5567d7c2 // indirect
 	github.com/pierrec/lz4 v2.0.5+incompatible // indirect
 	github.com/pkg/errors v0.8.1
@@ -44,7 +42,6 @@ require (
 	github.com/sevlyar/go-daemon v0.1.4
 	github.com/shogo82148/androidbinary v1.0.1
 	github.com/sirupsen/logrus v1.1.1
-	github.com/stretchr/objx v0.2.0 // indirect
 	github.com/stretchr/testify v1.4.0
 	github.com/ulikunitz/xz v0.5.5 // indirect
 	golang.org/x/crypto v0.0.0-20181112202954-3d3f9f413869 // indirect

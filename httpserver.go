@@ -430,6 +430,7 @@ func (server *Server) initHTTPServer() {
 		renderJSON(w, resp)
 	}).Methods("GET", "POST", "DELETE")
 
+	// Deprecated use /services/{name} instead
 	m.HandleFunc("/uiautomator", func(w http.ResponseWriter, r *http.Request) {
 		err := service.Start("uiautomator")
 		if err == nil {
@@ -441,6 +442,7 @@ func (server *Server) initHTTPServer() {
 		}
 	}).Methods("POST")
 
+	// Deprecated
 	m.HandleFunc("/uiautomator", func(w http.ResponseWriter, r *http.Request) {
 		err := service.Stop("uiautomator", true) // wait until program quit
 		if err == nil {
@@ -452,6 +454,7 @@ func (server *Server) initHTTPServer() {
 		}
 	}).Methods("DELETE")
 
+	// Deprecated
 	m.HandleFunc("/uiautomator", func(w http.ResponseWriter, r *http.Request) {
 		running := service.Running("uiautomator")
 		renderJSON(w, map[string]interface{}{
