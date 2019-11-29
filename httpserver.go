@@ -173,9 +173,30 @@ func (server *Server) initHTTPServer() {
 		renderJSON(w, info)
 	})
 
-	// list all webview paths
-	// ref:
-	m.HandleFunc("/proc/{pkgname}/webview", func(w http.ResponseWriter, r *http.Request) {
+	m.HandleFunc("/webviews", func(w http.ResponseWriter, r *http.Request) {
+		netUnix, err := procfs.NewNetUnix()
+		if err != nil {
+			return
+		}
+
+		unixPaths := make(map[string]bool, 0)
+		for _, row := range netUnix.Rows {
+			if !strings.HasPrefix(row.Path, "@") {
+				continue
+			}
+			if !strings.Contains(row.Path, "devtools_remote") {
+				continue
+			}
+			unixPaths[row.Path[1:]] = true
+		}
+		socketPaths := make([]string, 0, len(unixPaths))
+		for key := range unixPaths {
+			socketPaths = append(socketPaths, key)
+		}
+		renderJSON(w, socketPaths)
+	})
+
+	m.HandleFunc("/webviews/{pkgname}", func(w http.ResponseWriter, r *http.Request) {
 		packageName := mux.Vars(r)["pkgname"]
 		netUnix, err := procfs.NewNetUnix()
 		if err != nil {
@@ -200,7 +221,8 @@ func (server *Server) initHTTPServer() {
 			suffix := "_" + strconv.Itoa(proc.PID)
 
 			for socketPath := range unixPaths {
-				if strings.HasSuffix(socketPath, suffix) {
+				if strings.HasSuffix(socketPath, suffix) ||
+					(packageName == "com.android.browser" && socketPath == "chrome_devtools_remote") {
 					result = append(result, map[string]interface{}{
 						"pid":        proc.PID,
 						"name":       cmdline[0],
@@ -310,6 +332,31 @@ func (server *Server) initHTTPServer() {
 			"error":    err,
 		})
 	}).Methods("GET", "POST")
+
+	// TODO(ssx): untested
+	m.HandleFunc("/shell/background", func(w http.ResponseWriter, r *http.Request) {
+		command := r.FormValue("command")
+		if command == "" {
+			command = r.FormValue("c")
+		}
+		c := Command{
+			Args:  []string{command},
+			Shell: true,
+		}
+		pid, err := c.StartBackground()
+		if err != nil {
+			renderJSON(w, map[string]interface{}{
+				"success":     false,
+				"description": err.Error(),
+			})
+			return
+		}
+		renderJSON(w, map[string]interface{}{
+			"success":     true,
+			"pid":         pid,
+			"description": fmt.Sprintf("Successfully started program: %v", command),
+		})
+	})
 
 	m.HandleFunc("/shell/stream", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/octet-stream")

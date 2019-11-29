@@ -106,6 +106,26 @@ $ curl -X POST -d command="pwd" $DEVICE_URL/shell
 }
 ```
 
+后台Shell命令(可以在后台持续运行，不会被杀掉)
+
+```bash
+$ curl -X POST -d command="pwd" $DEVICE_URL/shell/background
+{
+    "success": true,
+}
+```
+
+## Webview相关
+```bash
+$ curl -X GET $DEVICE_URL/webviews
+[
+    "webview_devtools_remote_m6x_21074",
+    "webview_devtools_remote_m6x_27681",
+    "chrome_devtools_remote"
+]
+```
+
+
 ## App信息获取
 ```bash
 # 获取所有运行的应用

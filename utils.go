@@ -107,6 +107,16 @@ func (c Command) Run() error {
 	return cmd.Run()
 }
 
+func (c Command) StartBackground() (pid int, err error) {
+	cmd := c.newCommand()
+	err = cmd.Start()
+	if err != nil {
+		return
+	}
+	pid = cmd.Process.Pid
+	return
+}
+
 func (c Command) Output() (output []byte, err error) {
 	var b bytes.Buffer
 	c.Stdout = &b
