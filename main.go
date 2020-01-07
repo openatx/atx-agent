@@ -603,20 +603,20 @@ func main() {
 			"com.github.uiautomator.test/android.support.test.runner.AndroidJUnitRunner"},
 		Stdout:          os.Stdout,
 		Stderr:          os.Stderr,
-		MaxRetries:      3,
+		MaxRetries:      1, // only once
 		RecoverDuration: 30 * time.Second,
 		StopSignal:      os.Interrupt,
 		OnStart: func() error {
 			uiautomatorTimer.Reset()
-			log.Println("service uiautomator: startservice com.github.uiautomator/.Service")
-			runShell("am", "startservice", "-n", "com.github.uiautomator/.Service")
+			// log.Println("service uiautomator: startservice com.github.uiautomator/.Service")
+			// runShell("am", "startservice", "-n", "com.github.uiautomator/.Service")
 			return nil
 		},
 		OnStop: func() {
 			uiautomatorTimer.Stop()
-			log.Println("service uiautomator: stopservice com.github.uiautomator/.Service")
-			runShell("am", "stopservice", "-n", "com.github.uiautomator/.Service")
-			runShell("am", "force-stop", "com.github.uiautomator")
+			// log.Println("service uiautomator: stopservice com.github.uiautomator/.Service")
+			// runShell("am", "stopservice", "-n", "com.github.uiautomator/.Service")
+			// runShell("am", "force-stop", "com.github.uiautomator")
 		},
 	})
 
