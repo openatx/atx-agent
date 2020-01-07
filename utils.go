@@ -196,6 +196,15 @@ type ProcInfo struct {
 	Name       string   `json:"name"`
 }
 
+// Kill by Pid
+func (p ProcInfo) Kill() error {
+	process, err := os.FindProcess(p.Pid)
+	if err != nil {
+		return err
+	}
+	return process.Kill()
+}
+
 func listAllProcs() (ps []ProcInfo, err error) {
 	fs, err := procfs.NewFS(procfs.DefaultMountPoint)
 	if err != nil {

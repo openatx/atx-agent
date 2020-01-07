@@ -19,6 +19,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"os/user"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -383,13 +384,18 @@ func runDaemon() (cntxt *daemon.Context) {
 func stopSelf() {
 	// kill previous daemon first
 	log.Println("stop server self")
-	_, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/stop", listenPort))
+
+	client := http.Client{Timeout: 3 * time.Second}
+	_, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/stop", listenPort))
 	if err == nil {
 		log.Println("wait server stopped")
-		time.Sleep(1000 * time.Millisecond) // server will quit in 0.1s
+		time.Sleep(500 * time.Millisecond) // server will quit in 0.5s
 	} else {
 		log.Println("already stopped")
 	}
+
+	// to make sure stopped
+	killAgentProcess()
 }
 
 func init() {
@@ -420,6 +426,28 @@ func init() {
 	}
 }
 
+func killAgentProcess() error {
+	// kill process by process cmdline
+	procs, err := listAllProcs()
+	if err != nil {
+		return err
+	}
+	for _, p := range procs {
+		if os.Getpid() == p.Pid {
+			// do not kill self
+			continue
+		}
+		if len(p.Cmdline) >= 2 {
+			// cmdline: /data/local/tmp/atx-agent server -d
+			if filepath.Base(p.Cmdline[0]) == "atx-agent" && p.Cmdline[1] == "server" {
+				log.Infof("kill running atx-agent (pid=%d)", p.Pid)
+				p.Kill()
+			}
+		}
+	}
+	return nil
+}
+
 func main() {
 	kingpin.Version(version)
 	kingpin.CommandLine.HelpFlag.Short('h')
@@ -447,8 +475,9 @@ func main() {
 	apkPath := cmdIns.Arg("apkPath", "apk path").Required().String()
 
 	// CMD: info
-	kingpin.Command("info", "show device info")
+	os.Setenv("COLUMNS", "160")
 
+	kingpin.Command("info", "show device info")
 	switch kingpin.Parse() {
 	case "curl":
 		subcmd.DoCurl()
@@ -475,7 +504,9 @@ func main() {
 
 	if *fStop {
 		stopSelf()
-		return
+		if !*fDaemon {
+			return
+		}
 	}
 
 	// if *fRequirements {
@@ -497,8 +528,6 @@ func main() {
 			log.Fatal(err)
 		}
 		_ = u
-		// New
-		// u.Host
 	}
 
 	if _, err := os.Stat("/sdcard/tmp"); err != nil {
@@ -507,6 +536,8 @@ func main() {
 	os.Setenv("TMPDIR", "/sdcard/tmp")
 
 	if *fDaemon {
+		log.Println("run atx-agent in background")
+
 		cntxt := runDaemon()
 		if cntxt == nil {
 			log.Printf("atx-agent listening on %v:%d", mustGetOoutboundIP(), listenPort)
