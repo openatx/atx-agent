@@ -895,27 +895,28 @@ func (server *Server) initHTTPServer() {
 			wsWrite(websocket.TextMessage, []byte("@minitouch service start failed: "+err.Error()))
 			return
 		}
-		wsWrite(websocket.TextMessage, []byte("dial unix:@minitouch"))
+		unixSocketName := "@minitouchagent"
+		wsWrite(websocket.TextMessage, []byte("dial unix:"+unixSocketName))
 		log.Printf("minitouch connection: %v", r.RemoteAddr)
 		retries := 0
 		quitC := make(chan bool, 2)
 		operC := make(chan TouchRequest, 10)
 		defer func() {
-			wsWrite(websocket.TextMessage, []byte("unix:@minitouch websocket closed"))
+			wsWrite(websocket.TextMessage, []byte(unixSocketName+" websocket closed"))
 			close(operC)
 		}()
 		go func() {
 			for {
 				if retries > 10 {
-					log.Println("unix @minitouch connect failed")
-					wsWrite(websocket.TextMessage, []byte("@minitouch listen timeout, possibly minitouch not installed"))
+					log.Printf("unix %s connect failed", unixSocketName)
+					wsWrite(websocket.TextMessage, []byte(unixSocketName+" listen timeout, possibly minitouch not installed"))
 					ws.Close()
 					break
 				}
-				conn, err := net.Dial("unix", "@minitouch")
+				conn, err := net.Dial("unix", unixSocketName)
 				if err != nil {
 					retries++
-					log.Printf("dial @minitouch error: %v, wait 0.5s", err)
+					log.Printf("dial %s error: %v, wait 0.5s", unixSocketName, err)
 					select {
 					case <-quitC:
 						return
@@ -923,14 +924,14 @@ func (server *Server) initHTTPServer() {
 					}
 					continue
 				}
-				log.Println("unix @minitouch connected, accepting requests")
+				log.Printf("unix %s connected, accepting requests", unixSocketName)
 				retries = 0 // connected, reset retries
 				err = drainTouchRequests(conn, operC)
 				conn.Close()
 				if err != nil {
 					log.Println("drain touch requests err:", err)
 				} else {
-					log.Println("unix @minitouch disconnected")
+					log.Printf("unix %s disconnected", unixSocketName)
 					break // operC closed
 				}
 			}

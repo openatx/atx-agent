@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -36,13 +37,27 @@ func goFunc(f func() error) chan error {
 	return errC
 }
 
+func shellPath() string {
+	sh := os.Getenv("SHELL")
+	if sh == "" {
+		sh, err := exec.LookPath("sh")
+		if err == nil {
+			return sh
+		}
+		sh = "/system/bin/sh"
+	}
+	return sh
+}
+
 type CommandInfo struct {
 	Environ         []string
 	Args            []string
-	MaxRetries      int           // 3
-	NextLaunchWait  time.Duration // 0.5s
-	RecoverDuration time.Duration // 30s
+	ArgsFunc        func() ([]string, error) // generate Args when args is dynamic
+	MaxRetries      int                      // 3
+	NextLaunchWait  time.Duration            // 0.5s
+	RecoverDuration time.Duration            // 30s
 	StopSignal      os.Signal
+	Shell           bool
 
 	OnStart func() error // if return non nil, cmd will not run
 	OnStop  func()
@@ -71,7 +86,7 @@ func (cc *CommandCtrl) Exists(name string) bool {
 }
 
 func (cc *CommandCtrl) Add(name string, c CommandInfo) error {
-	if len(c.Args) == 0 {
+	if len(c.Args) == 0 && c.ArgsFunc == nil {
 		return errors.New("Args length must > 0")
 	}
 	if c.MaxRetries == 0 {
@@ -217,12 +232,26 @@ func (p *processKeeper) start() error {
 			if p.retries > p.cmdInfo.MaxRetries {
 				break
 			}
-			p.cmd = exec.Command(p.cmdInfo.Args[0], p.cmdInfo.Args[1:]...)
+			cmdArgs := p.cmdInfo.Args
+			if p.cmdInfo.ArgsFunc != nil {
+				var er error
+				cmdArgs, er = p.cmdInfo.ArgsFunc()
+				if er != nil {
+					debugPrintf("ArgsFunc error: %v", er)
+					goto CMD_DONE
+				}
+			}
+			debugPrintf("Args: %v", cmdArgs)
+			if p.cmdInfo.Shell {
+				// simple but works fine
+				cmdArgs = []string{shellPath(), "-c", strings.Join(cmdArgs, " ")}
+			}
+			p.cmd = exec.Command(cmdArgs[0], cmdArgs[1:]...)
 			p.cmd.Env = append(os.Environ(), p.cmdInfo.Environ...)
 			p.cmd.Stdin = p.cmdInfo.Stdin
 			p.cmd.Stdout = p.cmdInfo.Stdout
 			p.cmd.Stderr = p.cmdInfo.Stderr
-			debugPrintf("start args: %v, env: %v", p.cmdInfo.Args, p.cmdInfo.Environ)
+			debugPrintf("start args: %v, env: %v", cmdArgs, p.cmdInfo.Environ)
 			if err := p.cmd.Start(); err != nil {
 				goto CMD_DONE
 			}

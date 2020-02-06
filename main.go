@@ -7,7 +7,6 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"html/template"
 	"io"
 	"io/ioutil"
 	syslog "log"
@@ -269,7 +268,9 @@ func renderHTML(w http.ResponseWriter, filename string) {
 		return
 	}
 	content, _ := ioutil.ReadAll(file)
-	template.Must(template.New(filename).Parse(string(content))).Execute(w, nil)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Length", strconv.Itoa(len(content)))
+	w.Write(content)
 }
 
 var (
@@ -572,8 +573,23 @@ func main() {
 		Args: []string{"/data/local/tmp/minicap", "-S", "-P",
 			fmt.Sprintf("%dx%d@%dx%d/0", width, height, displayMaxWidthHeight, displayMaxWidthHeight)},
 	})
+
 	service.Add("minitouch", cmdctrl.CommandInfo{
-		Args: []string{"/data/local/tmp/minitouch"},
+		ArgsFunc: func() ([]string, error) {
+			pmPathOutput, err := Command{
+				Args: []string{"pm", "path", "com.github.uiautomator"},
+			}.CombinedOutputString()
+			if err != nil {
+				return nil, err
+			}
+			if !strings.HasPrefix(pmPathOutput, "package:") {
+				return nil, errors.New("invalid pm path output: " + pmPathOutput)
+			}
+			packagePath := strings.TrimSpace(pmPathOutput[len("package:"):])
+			return []string{"CLASSPATH=" + packagePath, "exec", "app_process", "/system/bin", "com.github.uiautomator.MinitouchAgent"}, nil
+			// return []string{"/data/local/tmp/minitouch"}, nil
+		},
+		Shell: true,
 	})
 
 	// uiautomator 1.0
@@ -660,6 +676,9 @@ func main() {
 			log.Println("Ignore signal", sig)
 		}
 	}()
+
+	service.Start("minitouch")
+
 	// run server forever
 	if err := server.Serve(listener); err != nil {
 		log.Println("server quit:", err)

@@ -5,59 +5,224 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
-  <title>Document</title>
+  <title>Remote control</title>
 </head>
 
 <body>
-  <canvas id="canvas" style="border: 1px solid red;"></canvas>
+  <div id="app">
+    <h3>极简手机远程控制 <small style="color: gray" v-text="message"></small></h3>
+    <div style="margin: 5px 0px">
+      <button @click="refreshImg">刷新画面</button>
+    </div>
+    <div>
+      <img ref="display" style="border: 1px solid blue;" />
+    </div>
+  </div>
 
+  <script src="//cdn.jsdelivr.net/g/vue@2.1.10,jquery@3.1.1"></script>
   <script>
-    /*jshint browser:true*/
-    var BLANK_IMG =
+    const BLANK_IMG =
       'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='
-    var canvas = document.getElementById('canvas'),
-      g = canvas.getContext('2d')
-    var ws = new WebSocket('ws://' + location.host + "/minicap")
-    ws.binaryType = 'blob'
-    ws.onclose = function () {
-      console.log('onclose', arguments)
-      var warn = document.createElement("div")
-      warn.innerText = "Websocket closed, Refresh to reload."
-      warn.style.color = "red"
-      warn.style.fontSize = "20px"
-      document.body.appendChild(warn);
-    }
-    ws.onerror = function () {
-      console.log('onerror', arguments)
-    }
-    ws.onmessage = function (message) {
-      if (message.data instanceof Blob) {
-        var blob = new Blob([message.data], {
-          type: 'image/jpeg'
-        })
-        var URL = window.URL || window.webkitURL
-        var img = new Image()
-        img.onload = function () {
-          console.log(img.width, img.height)
-          canvas.width = img.width
-          canvas.height = img.height
-          g.drawImage(img, 0, 0)
-          img.onload = null
-          img.src = BLANK_IMG
-          img = null
-          u = null
-          blob = null
-        }
-        var u = URL.createObjectURL(blob)
-        img.src = u
-      } else {
-        console.log(message.data)
+
+    /**
+      * Rotation affects the screen as follows:
+      *
+      *                   0deg
+      *                 |------|
+      *                 | MENU |
+      *                 |------|
+      *            -->  |      |  --|
+      *            |    |      |    v
+      *                 |      |
+      *                 |      |
+      *                 |------|
+      *        |----|-|          |-|----|
+      *        |    |M|          | |    |
+      *        |    |E|          | |    |
+      *  90deg |    |N|          |U|    | 270deg
+      *        |    |U|          |N|    |
+      *        |    | |          |E|    |
+      *        |    | |          |M|    |
+      *        |----|-|          |-|----|
+      *                 |------|
+      *            ^    |      |    |
+      *            |--  |      |  <--
+      *                 |      |
+      *                 |      |
+      *                 |------|
+      *                 | UNEM |
+      *                 |------|
+      *                  180deg
+      *
+      * Which leads to the following mapping:
+      *
+      * |--------------|------|---------|---------|---------|
+      * |              | 0deg |  90deg  |  180deg |  270deg |
+      * |--------------|------|---------|---------|---------|
+      * | CSS rotate() | 0deg | -90deg  | -180deg |  90deg  |
+      * | bounding w   |  w   |    h    |    w    |    h    |
+      * | bounding h   |  h   |    w    |    h    |    w    |
+      * | pos x        |  x   |   h-y   |   w-x   |    y    |
+      * | pos y        |  y   |    x    |   h-y   |   h-x   |
+      * |--------------|------|---------|---------|---------|
+      */
+    function coords(boundingW, boundingH, relX, relY, rotation) {
+      var w, h, x, y;
+
+      switch (rotation) {
+        case 0:
+          w = boundingW
+          h = boundingH
+          x = relX
+          y = relY
+          break
+        case 90:
+          w = boundingH
+          h = boundingW
+          x = boundingH - relY
+          y = relX
+          break
+        case 180:
+          w = boundingW
+          h = boundingH
+          x = boundingW - relX
+          y = boundingH - relY
+          break
+        case 270:
+          w = boundingH
+          h = boundingW
+          x = relY
+          y = boundingW - relX
+          break
+      }
+
+      return {
+        xP: x / w,
+        yP: y / h,
       }
     }
-    ws.onopen = function () {
-      console.log('onopen', arguments)
-      ws.send('1920x1080/0')
-    }
+
+    window.vm = new Vue({
+      el: "#app",
+      data: {
+        message: "",
+        canvas: null,
+        img: null,
+        rotation: 0,
+      },
+      mounted() {
+        const img = this.img = this.$refs.display
+        img.style.maxWidth = "800px"
+        img.style.maxHeight = window.innerHeight - img.getBoundingClientRect().top + "px"
+
+        img.src = `http://${location.host}/screenshot`
+        img.onload = () => {
+          this.notify("image loaded")
+        }
+        this.syncDisplay()
+        this.syncTouchpad()
+      },
+      methods: {
+        refreshImg() {
+          this.notify("image loading ...")
+          this.img.src = `http://${location.host}/screenshot?t=${new Date().getTime()}`
+        },
+        syncTouchpad() {
+          const element = this.img;
+
+          let touchSync = (operation, event) => {
+            var e = event;
+            if (e.originalEvent) {
+              e = e.originalEvent
+            }
+            e.preventDefault()
+
+            let x = e.offsetX, y = e.offsetY
+            let w = e.target.clientWidth, h = e.target.clientHeight
+            let scaled = coords(w, h, x, y, this.rotation);
+            ws.send(JSON.stringify({
+              operation: operation, // u, d, c, w
+              index: 0,
+              pressure: 0.5,
+              xP: scaled.xP,
+              yP: scaled.yP,
+            }))
+            ws.send(JSON.stringify({ operation: 'c' }))
+          }
+
+          function mouseMoveListener(event) {
+            touchSync('m', event)
+          }
+
+          function mouseUpListener(event) {
+            touchSync('u', event)
+            element.removeEventListener('mousemove', mouseMoveListener);
+            document.removeEventListener('mouseup', mouseUpListener);
+          }
+
+          function mouseDownListener(event) {
+            touchSync('d', event)
+            element.addEventListener('mousemove', mouseMoveListener);
+            document.addEventListener("mouseup", mouseUpListener)
+          }
+
+          let ws = new WebSocket("ws://" + location.host + "/minitouch")
+
+          ws.onopen = (ret) => {
+            console.log("minitouch connected")
+            ws.send(JSON.stringify({ // touch reset, fix when device is outof control
+              operation: "r",
+            }))
+            element.addEventListener("mousedown", mouseDownListener)
+          }
+          ws.onmessage = (message) => {
+            console.log("minitouch recv", message)
+          }
+
+          ws.onclose = () => {
+            console.log("minitouch closed")
+            element.removeEventListener("mousedown", mouseDownListener)
+            this.notify("minitouch closed")
+          }
+        },
+        syncDisplay(canvas) {
+          let ws = new WebSocket('ws://' + location.host + "/minicap")
+          ws.onclose = function () {
+            var warn = document.createElement("div")
+            warn.innerText = "Websocket closed, Refresh to reload."
+            warn.style.color = "red"
+            warn.style.fontSize = "20px"
+            document.body.appendChild(warn);
+          }
+          ws.onerror = function () {
+            console.log('onerror', arguments)
+          }
+          ws.onmessage = function (message) {
+            if (message.data instanceof Blob) {
+              let blob = new Blob([message.data], {
+                type: 'image/jpeg'
+              })
+              let URL = window.URL || window.webkitURL
+              let u = URL.createObjectURL(blob)
+              this.img.src = u
+            } else if (/data size: /.test(message.data)) {
+              // console.log("receive message:", message.data)
+            } else if (/^rotation/.test(message.data)) {
+              this.rotation = parseInt(message.data.substr('rotation '.length), 10);
+              console.log("rotation:", this.rotation)
+            } else {
+              console.log("receive message:", message.data)
+            }
+          }
+          ws.onopen = function () {
+            console.log('onopen', arguments)
+          }
+        },
+        notify(message) {
+          this.message = message
+        }
+      }
+    })
   </script>
 </body>
 
