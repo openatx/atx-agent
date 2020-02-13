@@ -57,3 +57,5 @@ replace (
 	github.com/qiniu/log v0.0.0-20140728010919-a304a74568d6 => github.com/gobuild/log v1.0.0
 	golang.org/x/net v0.0.0-20181114220301-adae6a3d119a => github.com/golang/net v0.0.0-20181114220301-adae6a3d119a
 )
+
+go 1.13
