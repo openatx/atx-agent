@@ -614,7 +614,10 @@ func (server *Server) initHTTPServer() {
 		if killed {
 			service.Start("minicap")
 		}
+
+		// minicapHub.broadcast <- []byte("rotation " + strconv.Itoa(deviceRotation))
 		updateMinicapRotation(deviceRotation)
+		rotationPublisher.Submit(deviceRotation)
 
 		// APK Service will send rotation to atx-agent when rotation changes
 		runShellTimeout(5*time.Second, "am", "startservice", "--user", "0", "-n", "com.github.uiautomator/.Service")
@@ -962,7 +965,10 @@ func (server *Server) initHTTPServer() {
 		}
 	}).Methods("PUT")
 
+	m.HandleFunc("/minicap/broadcast", broadcastWebsocket()).Methods("GET")
+
 	m.HandleFunc("/minicap", singleFightNewerWebsocket(func(w http.ResponseWriter, r *http.Request, ws *websocket.Conn) {
+		ctx := r.Context()
 		defer ws.Close()
 
 		const wsWriteWait = 10 * time.Second
@@ -979,7 +985,6 @@ func (server *Server) initHTTPServer() {
 		wsWrite(websocket.TextMessage, []byte("dial unix:@minicap"))
 		log.Printf("minicap connection: %v", r.RemoteAddr)
 		dataC := make(chan []byte, 10)
-		quitC := make(chan bool, 2)
 
 		go func() {
 			defer close(dataC)
@@ -995,7 +1000,7 @@ func (server *Server) initHTTPServer() {
 					retries++
 					log.Printf("dial @minicap err: %v, wait 0.5s", err)
 					select {
-					case <-quitC:
+					case <-ctx.Done():
 						return
 					case <-time.After(500 * time.Millisecond):
 					}
@@ -1003,7 +1008,7 @@ func (server *Server) initHTTPServer() {
 				}
 				dataC <- []byte("rotation " + strconv.Itoa(deviceRotation))
 				retries = 0 // connected, reset retries
-				if er := translateMinicap(conn, dataC, quitC); er == nil {
+				if er := translateMinicap(conn, dataC, ctx); er == nil {
 					conn.Close()
 					log.Println("transfer closed")
 					break
@@ -1016,7 +1021,6 @@ func (server *Server) initHTTPServer() {
 		go func() {
 			for {
 				if _, _, err := ws.ReadMessage(); err != nil {
-					quitC <- true
 					break
 				}
 			}
@@ -1035,7 +1039,6 @@ func (server *Server) initHTTPServer() {
 				}
 			}
 		}
-		quitC <- true
 		log.Println("stream finished")
 	})).Methods("GET")
 

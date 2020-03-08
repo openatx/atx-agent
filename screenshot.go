@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 
 	"github.com/pkg/errors"
 )
@@ -33,8 +32,7 @@ func screenshotWithMinicap(filename, thumbnailSize string) (err error) {
 }
 
 func screenshotWithScreencap(filename string) (err error) {
-	output, err := runShellOutput("screencap", "-p", filename)
+	_, err = runShellOutput("screencap", "-p", filename)
 	err = errors.Wrap(err, "screencap")
-	log.Printf("screencap: %s, %v", output, err)
 	return
 }

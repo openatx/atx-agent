@@ -115,10 +115,10 @@
         img.style.maxWidth = "800px"
         img.style.maxHeight = window.innerHeight - img.getBoundingClientRect().top + "px"
 
-        img.src = `http://${location.host}/screenshot`
-        img.onload = () => {
-          this.notify("image loaded")
-        }
+        // img.src = `http://${location.host}/screenshot`
+        // img.onload = () => {
+        //   this.notify("image loaded")
+        // }
         this.syncDisplay()
         this.syncTouchpad()
       },
@@ -186,8 +186,8 @@
           }
         },
         syncDisplay(canvas) {
-          let ws = new WebSocket('ws://' + location.host + "/minicap")
-          ws.onclose = function () {
+          let ws = new WebSocket('ws://' + location.host + "/minicap/broadcast")
+          ws.onclose = () => {
             var warn = document.createElement("div")
             warn.innerText = "Websocket closed, Refresh to reload."
             warn.style.color = "red"
@@ -197,7 +197,7 @@
           ws.onerror = function () {
             console.log('onerror', arguments)
           }
-          ws.onmessage = function (message) {
+          ws.onmessage = (message) => {
             if (message.data instanceof Blob) {
               let blob = new Blob([message.data], {
                 type: 'image/jpeg'

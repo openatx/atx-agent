@@ -7,6 +7,7 @@ require (
 	github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf // indirect
 	github.com/codeskyblue/goreq v0.0.0-20180831024223-49450746aaef
 	github.com/dsnet/compress v0.0.0-20171208185109-cc9eb1d7ad76 // indirect
+	github.com/dustin/go-broadcast v0.0.0-20171205050544-f664265f5a66
 	github.com/franela/goblin v0.0.0-20181003173013-ead4ad1d2727 // indirect
 	github.com/franela/goreq v0.0.0-20171204163338-bcd34c9993f8
 	github.com/getlantern/context v0.0.0-20181106182922-539649cc3118 // indirect

@@ -653,3 +653,28 @@ func listPackages() (pkgs []PackageInfo, err error) {
 	}
 	return
 }
+
+func killProcessByName(processName string) bool {
+	procs, err := procfs.AllProcs()
+	if err != nil {
+		return false
+	}
+	for _, p := range procs {
+		cmdline, _ := p.CmdLine()
+		var name string
+		if len(cmdline) >= 1 {
+			name = filepath.Base(cmdline[0])
+		} else {
+			name, _ = p.Comm()
+		}
+
+		if name == processName {
+			process, err := os.FindProcess(p.PID)
+			if err == nil {
+				process.Kill()
+				return true
+			}
+		}
+	}
+	return false
+}

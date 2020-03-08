@@ -23,12 +23,6 @@ var (
 	ErrAlreadyStopped = errors.New("already stopped")
 )
 
-func debugPrintf(format string, v ...interface{}) {
-	if debug {
-		log.Printf("DEBUG "+format, v...)
-	}
-}
-
 func goFunc(f func() error) chan error {
 	errC := make(chan error, 1)
 	go func() {
@@ -108,6 +102,7 @@ func (cc *CommandCtrl) Add(name string, c CommandInfo) error {
 		return errors.New("name conflict: " + name)
 	}
 	cc.cmds[name] = &processKeeper{
+		name:    name,
 		cmdInfo: c,
 	}
 	return nil
@@ -153,15 +148,8 @@ func (cc *CommandCtrl) StopAll() {
 }
 
 func (cc *CommandCtrl) Restart(name string) error {
-	cc.rl.RLock()
-	pkeeper, ok := cc.cmds[name]
-	if !ok {
-		cc.rl.RUnlock()
-		return errors.New("cmdctl not found: " + name)
-	}
-	cc.rl.RUnlock()
-	pkeeper.stop(true)
-	return pkeeper.start()
+	cc.Stop(name, true)
+	return cc.Start(name)
 }
 
 // UpdateArgs func is not like exec.Command, the first argument name means cmdctl service name
@@ -179,7 +167,7 @@ func (cc *CommandCtrl) UpdateArgs(name string, args ...string) error {
 		return errors.New("cmdctl not found: " + name)
 	}
 	pkeeper.cmdInfo.Args = args
-	debugPrintf("cmd args: %v", pkeeper.cmdInfo.Args)
+	log.Printf("cmd args: %v", pkeeper.cmdInfo.Args)
 	if !pkeeper.keeping {
 		return nil
 	}
@@ -199,6 +187,7 @@ func (cc *CommandCtrl) Running(name string) bool {
 
 // keep process running
 type processKeeper struct {
+	name       string
 	mu         sync.Mutex
 	cmdInfo    CommandInfo
 	cmd        *exec.Cmd
@@ -237,11 +226,11 @@ func (p *processKeeper) start() error {
 				var er error
 				cmdArgs, er = p.cmdInfo.ArgsFunc()
 				if er != nil {
-					debugPrintf("ArgsFunc error: %v", er)
+					log.Printf("ArgsFunc error: %v", er)
 					goto CMD_DONE
 				}
 			}
-			debugPrintf("Args: %v", cmdArgs)
+			log.Printf("[%s] Args: %v", p.name, cmdArgs)
 			if p.cmdInfo.Shell {
 				// simple but works fine
 				cmdArgs = []string{shellPath(), "-c", strings.Join(cmdArgs, " ")}
@@ -251,17 +240,19 @@ func (p *processKeeper) start() error {
 			p.cmd.Stdin = p.cmdInfo.Stdin
 			p.cmd.Stdout = p.cmdInfo.Stdout
 			p.cmd.Stderr = p.cmdInfo.Stderr
-			debugPrintf("start args: %v, env: %v", cmdArgs, p.cmdInfo.Environ)
+			log.Printf("start args: %v, env: %v", cmdArgs, p.cmdInfo.Environ)
 			if err := p.cmd.Start(); err != nil {
 				goto CMD_DONE
 			}
-			debugPrintf("program pid: %d", p.cmd.Process.Pid)
+			log.Printf("[%s] program pid: %d", p.name, p.cmd.Process.Pid)
 			p.runBeganAt = time.Now()
 			p.running = true
 			cmdC := goFunc(p.cmd.Wait)
 			select {
 			case cmdErr := <-cmdC:
-				debugPrintf("cmd wait err: %v", cmdErr)
+				if cmdErr != nil {
+					log.Printf("[%s] cmd wait err: %v", p.name, cmdErr)
+				}
 				if time.Since(p.runBeganAt) > p.cmdInfo.RecoverDuration {
 					p.retries -= 2
 				}
@@ -272,7 +263,7 @@ func (p *processKeeper) start() error {
 				goto CMD_DONE
 			}
 		CMD_IDLE:
-			debugPrintf("idle for %v", p.cmdInfo.NextLaunchWait)
+			log.Printf("[%s] idle for %v", p.name, p.cmdInfo.NextLaunchWait)
 			p.running = false
 			select {
 			case <-p.stopC:
@@ -282,7 +273,7 @@ func (p *processKeeper) start() error {
 			}
 		}
 	CMD_DONE:
-		debugPrintf("program finished")
+		log.Printf("[%s] program finished", p.name)
 		if p.cmdInfo.OnStop != nil {
 			p.cmdInfo.OnStop()
 		}

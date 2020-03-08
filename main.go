@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/alecthomas/kingpin"
+	"github.com/dustin/go-broadcast"
 	"github.com/gorilla/websocket"
 	"github.com/openatx/androidutils"
 	"github.com/openatx/atx-agent/cmdctrl"
@@ -52,6 +53,8 @@ var (
 	repo          = "atx-agent"
 	listenPort    int
 	daemonLogPath = "/sdcard/atx-agent.log"
+
+	rotationPublisher = broadcast.NewBroadcaster(1)
 )
 
 const (
@@ -328,7 +331,7 @@ func (r *errorBinaryReader) ReadInto(datas ...interface{}) error {
 }
 
 // read from @minicap and send jpeg raw data to channel
-func translateMinicap(conn net.Conn, jpgC chan []byte, quitC chan bool) error {
+func translateMinicap(conn net.Conn, jpgC chan []byte, ctx context.Context) error {
 	var pid, rw, rh, vw, vh uint32
 	var version, unused, orientation, quirkFlag uint8
 	rd := bufio.NewReader(conn)
@@ -355,7 +358,7 @@ func translateMinicap(conn net.Conn, jpgC chan []byte, quitC chan bool) error {
 		}
 		select {
 		case jpgC <- buf.Bytes(): // Maybe should use buffer instead
-		case <-quitC:
+		case <-ctx.Done():
 			return nil
 		default:
 			// TODO(ssx): image should not wait or it will stuck here
@@ -574,7 +577,30 @@ func main() {
 			fmt.Sprintf("%dx%d@%dx%d/0", width, height, displayMaxWidthHeight, displayMaxWidthHeight)},
 	})
 
+	service.Add("scrcpy", cmdctrl.CommandInfo{
+		OnStart: func() error {
+			log.Println("killProcessByName scrcpy.cli")
+			// killProcessByName("scrcpy.cli")
+			return nil
+		},
+		ArgsFunc: func() ([]string, error) {
+			pmPathOutput, err := Command{
+				Args:  []string{"pm", "path", "com.github.uiautomator"},
+				Shell: true,
+			}.CombinedOutputString()
+			if err != nil {
+				return nil, err
+			}
+			if !strings.HasPrefix(pmPathOutput, "package:") {
+				return nil, errors.New("invalid pm path output: " + pmPathOutput)
+			}
+			packagePath := strings.TrimSpace(pmPathOutput[len("package:"):])
+			return []string{"CLASSPATH=" + packagePath, "exec", "app_process", "/system/bin", "com.github.uiautomator.ScrcpyAgent"}, nil
+		},
+		Shell: true,
+	})
 	service.Add("minitouch", cmdctrl.CommandInfo{
+		MaxRetries: 2,
 		ArgsFunc: func() ([]string, error) {
 			sdk, err := strconv.Atoi(getCachedProperty("ro.build.version.sdk"))
 			if err != nil || sdk <= 28 { // Android P(sdk:28)
