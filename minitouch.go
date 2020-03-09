@@ -11,8 +11,6 @@ import (
 	"github.com/qiniu/log"
 )
 
-var minitouchSocketPath = "@minitouch"
-
 type toucher struct {
 	width, height int
 	rotation      int

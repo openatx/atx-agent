@@ -54,7 +54,9 @@ var (
 	listenPort    int
 	daemonLogPath = "/sdcard/atx-agent.log"
 
-	rotationPublisher = broadcast.NewBroadcaster(1)
+	rotationPublisher   = broadcast.NewBroadcaster(1)
+	minicapSocketPath   = "@minicap"
+	minitouchSocketPath = "@minitouch"
 )
 
 const (
@@ -191,10 +193,18 @@ var (
 )
 
 func updateMinicapRotation(rotation int) {
+	running := service.Running("minicap")
+	if running {
+		service.Stop("minicap")
+		killProcessByName("minicap") // kill not controlled minicap
+	}
 	devInfo := getDeviceInfo()
 	width, height := devInfo.Display.Width, devInfo.Display.Height
 	service.UpdateArgs("minicap", "/data/local/tmp/minicap", "-S", "-P",
 		fmt.Sprintf("%dx%d@%dx%d/%d", width, height, displayMaxWidthHeight, displayMaxWidthHeight, rotation))
+	if running {
+		service.Start("minicap")
+	}
 }
 
 func checkUiautomatorInstalled() (ok bool) {
@@ -428,6 +438,44 @@ func init() {
 		}
 		time.Local = time.FixedZone(tz, offset*3600)
 	}
+
+	// watch rotation and send to rotatinPublisher
+	go _watchRotation()
+	if !isMinicapSupported() {
+		minicapSocketPath = "@minicapagent"
+	}
+	if !fileExists("/data/local/tmp/minitouch") {
+		minitouchSocketPath = "@minitouchagent"
+	} else if sdk, _ := strconv.Atoi(getCachedProperty("ro.build.version.sdk")); sdk > 28 { // Android Q..
+		minitouchSocketPath = "@minitouchagent"
+	}
+}
+
+func _watchRotation() {
+	for {
+		conn, err := net.Dial("unix", "@rotationagent")
+		if err != nil {
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		func() {
+			defer conn.Close()
+			scanner := bufio.NewScanner(conn)
+			for scanner.Scan() {
+				rotation, err := strconv.Atoi(scanner.Text())
+				if err != nil {
+					continue
+				}
+				deviceRotation = rotation
+				if minicapSocketPath == "@minicap" {
+					updateMinicapRotation(deviceRotation)
+				}
+				rotationPublisher.Submit(rotation)
+				log.Println("Rotation -->", rotation)
+			}
+		}()
+		time.Sleep(1 * time.Second)
+	}
 }
 
 func killAgentProcess() error {
@@ -577,51 +625,29 @@ func main() {
 			fmt.Sprintf("%dx%d@%dx%d/0", width, height, displayMaxWidthHeight, displayMaxWidthHeight)},
 	})
 
-	service.Add("scrcpy", cmdctrl.CommandInfo{
+	service.Add("apkagent", cmdctrl.CommandInfo{
+		MaxRetries: 2,
+		Shell:      true,
 		OnStart: func() error {
-			log.Println("killProcessByName scrcpy.cli")
-			// killProcessByName("scrcpy.cli")
+			log.Println("killProcessByName apk-agent.cli")
+			killProcessByName("apkagent.cli")
 			return nil
 		},
 		ArgsFunc: func() ([]string, error) {
-			pmPathOutput, err := Command{
-				Args:  []string{"pm", "path", "com.github.uiautomator"},
-				Shell: true,
-			}.CombinedOutputString()
+			packagePath, err := getPackagePath("com.github.uiautomator")
 			if err != nil {
 				return nil, err
 			}
-			if !strings.HasPrefix(pmPathOutput, "package:") {
-				return nil, errors.New("invalid pm path output: " + pmPathOutput)
-			}
-			packagePath := strings.TrimSpace(pmPathOutput[len("package:"):])
-			return []string{"CLASSPATH=" + packagePath, "exec", "app_process", "/system/bin", "com.github.uiautomator.ScrcpyAgent"}, nil
+			return []string{"CLASSPATH=" + packagePath, "exec", "app_process", "/system/bin", "com.github.uiautomator.Console"}, nil
 		},
-		Shell: true,
 	})
+
+	service.Start("apkagent")
+
 	service.Add("minitouch", cmdctrl.CommandInfo{
 		MaxRetries: 2,
-		ArgsFunc: func() ([]string, error) {
-			sdk, err := strconv.Atoi(getCachedProperty("ro.build.version.sdk"))
-			if err != nil || sdk <= 28 { // Android P(sdk:28)
-				minitouchSocketPath = "@minitouch"
-				return []string{"/data/local/tmp/minitouch"}, nil
-			}
-			minitouchSocketPath = "@minitouchagent"
-			pmPathOutput, err := Command{
-				Args:  []string{"pm", "path", "com.github.uiautomator"},
-				Shell: true,
-			}.CombinedOutputString()
-			if err != nil {
-				return nil, err
-			}
-			if !strings.HasPrefix(pmPathOutput, "package:") {
-				return nil, errors.New("invalid pm path output: " + pmPathOutput)
-			}
-			packagePath := strings.TrimSpace(pmPathOutput[len("package:"):])
-			return []string{"CLASSPATH=" + packagePath, "exec", "app_process", "/system/bin", "com.github.uiautomator.MinitouchAgent"}, nil
-		},
-		Shell: true,
+		Args:       []string{"/data/local/tmp/minitouch"},
+		Shell:      true,
 	})
 
 	// uiautomator 1.0

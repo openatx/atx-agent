@@ -17,7 +17,6 @@ type Hub struct {
 	broadcast  chan []byte      // Inbound messages from the clients.
 	register   chan *Client     // Register requests from the clients.
 	unregister chan *Client     // Unregister requests from clients.
-	_quit      chan bool
 }
 
 func newHub() *Hub {
@@ -29,22 +28,25 @@ func newHub() *Hub {
 	}
 }
 
-func (h *Hub) _startScrcpyAgent(ctx context.Context) {
-	h.broadcast <- []byte("welcome new client, scrcpy is launching")
-	service.Start("scrcpy")
+func (h *Hub) _startTranslate(ctx context.Context) {
+	h.broadcast <- []byte("welcome")
+	if minicapSocketPath == "@minicap" {
+		service.Start("minicap")
+	}
 
+	log.Printf("Receive images from %s", minicapSocketPath)
 	retries := 0
 	for {
 		if retries > 10 {
-			log.Println("unix @scrcpy connect failed")
-			h.broadcast <- []byte("@scrcpy listen timeout, possibly scrcpy not installed")
+			log.Printf("unix %s connect failed", minicapSocketPath)
+			h.broadcast <- []byte("@minicapagent listen timeout")
 			break
 		}
 
-		conn, err := net.Dial("unix", "@scrcpy")
+		conn, err := net.Dial("unix", minicapSocketPath)
 		if err != nil {
 			retries++
-			log.Printf("dial @scrcpy err: %v, wait 0.5s", err)
+			log.Printf("dial %s err: %v, wait 0.5s", minicapSocketPath, err)
 			select {
 			case <-ctx.Done():
 				return
@@ -52,7 +54,7 @@ func (h *Hub) _startScrcpyAgent(ctx context.Context) {
 			}
 			continue
 		}
-		h.broadcast <- []byte("rotation " + strconv.Itoa(deviceRotation))
+
 		retries = 0 // connected, reset retries
 		if er := translateMinicap(conn, h.broadcast, ctx); er == nil {
 			conn.Close()
@@ -77,7 +79,7 @@ func (h *Hub) run() {
 			h.broadcast <- []byte("rotation " + strconv.Itoa(deviceRotation))
 			if len(h.clients) == 1 {
 				ctx, cancel = context.WithCancel(context.Background())
-				go h._startScrcpyAgent(ctx)
+				go h._startTranslate(ctx)
 			}
 		case client := <-h.unregister:
 			if _, ok := h.clients[client]; ok {
@@ -85,7 +87,7 @@ func (h *Hub) run() {
 				close(client.send)
 			}
 			if len(h.clients) == 0 {
-				log.Println("client quit, all gone")
+				log.Println("All client quited, context stop minicap service")
 				cancel()
 			}
 		case message := <-h.broadcast:

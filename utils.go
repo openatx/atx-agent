@@ -659,6 +659,8 @@ func killProcessByName(processName string) bool {
 	if err != nil {
 		return false
 	}
+
+	killed := false
 	for _, p := range procs {
 		cmdline, _ := p.CmdLine()
 		var name string
@@ -672,9 +674,24 @@ func killProcessByName(processName string) bool {
 			process, err := os.FindProcess(p.PID)
 			if err == nil {
 				process.Kill()
-				return true
+				killed = true
 			}
 		}
 	}
-	return false
+	return killed
+}
+
+func getPackagePath(packageName string) (string, error) {
+	pmPathOutput, err := Command{
+		Args:  []string{"pm", "path", "com.github.uiautomator"},
+		Shell: true,
+	}.CombinedOutputString()
+	if err != nil {
+		return "", err
+	}
+	if !strings.HasPrefix(pmPathOutput, "package:") {
+		return "", errors.New("invalid pm path output: " + pmPathOutput)
+	}
+	packagePath := strings.TrimSpace(pmPathOutput[len("package:"):])
+	return packagePath, nil
 }

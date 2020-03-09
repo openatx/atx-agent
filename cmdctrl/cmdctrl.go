@@ -240,7 +240,7 @@ func (p *processKeeper) start() error {
 			p.cmd.Stdin = p.cmdInfo.Stdin
 			p.cmd.Stdout = p.cmdInfo.Stdout
 			p.cmd.Stderr = p.cmdInfo.Stderr
-			log.Printf("start args: %v, env: %v", cmdArgs, p.cmdInfo.Environ)
+			log.Printf("[%s] args: %v, env: %v", p.name, cmdArgs, p.cmdInfo.Environ)
 			if err := p.cmd.Start(); err != nil {
 				goto CMD_DONE
 			}
