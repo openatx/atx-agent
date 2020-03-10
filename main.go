@@ -292,7 +292,7 @@ var (
 	// target, _ := url.Parse("http://127.0.0.1:9008")
 	// uiautomatorProxy := httputil.NewSingleHostReverseProxy(target)
 
-	uiautomatorTimer = NewSafeTimer(time.Minute * 3)
+	uiautomatorTimer = NewSafeTimer(time.Hour * 3)
 
 	uiautomatorProxy = &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
