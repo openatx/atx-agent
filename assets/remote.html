@@ -12,7 +12,10 @@
   <div id="app">
     <h3>极简手机远程控制 <small style="color: gray" v-text="message"></small></h3>
     <div style="margin: 5px 0px">
-      <button @click="refreshImg">刷新画面</button>
+      <span style="background-color:blueviolet; color:whilte" v-show="readonly">ReadOnly</span>
+      <button @click="refreshImg">刷新画面 fps: <span v-text="fps.toFixed(1)"></span></button>
+      <button @click="keyevent('HOME')">HOME</button>
+      <input v-model="command" placeholder="shell command" v-on:keyup.enter="runCommand">
     </div>
     <div>
       <img ref="display" style="border: 1px solid blue;" />
@@ -109,6 +112,10 @@
         canvas: null,
         img: null,
         rotation: 0,
+        command: "",
+        readonly: true,
+        fps: 0,
+        periodImageCount: 0,
       },
       mounted() {
         const img = this.img = this.$refs.display
@@ -121,8 +128,37 @@
         // }
         this.syncDisplay()
         this.syncTouchpad()
+
+        // calculate fps
+        setInterval(()=>{
+          this.fps = this.periodImageCount / 0.5
+          this.periodImageCount = 0
+        }, 500)
       },
       methods: {
+        keyevent(key) {
+          return $.ajax({
+            url: "/shell",
+            method: "post",
+            data: {
+              command: "input keyevent " + key,
+            }
+          })
+        },
+        runCommand() {
+          return $.ajax({
+            url: "/shell",
+            method: "post",
+            data: {
+              command: this.command,
+            },
+            dataType: "json",
+          }).then((resp) => {
+            console.log(this.command + ": " + resp.output)
+            this.command = ""
+            alert(resp.output)
+          })
+        },
         refreshImg() {
           this.notify("image loading ...")
           this.img.src = `http://${location.host}/screenshot?t=${new Date().getTime()}`
@@ -169,6 +205,7 @@
           let ws = new WebSocket("ws://" + location.host + "/minitouch")
 
           ws.onopen = (ret) => {
+            this.readonly = false
             console.log("minitouch connected")
             ws.send(JSON.stringify({ // touch reset, fix when device is outof control
               operation: "r",
@@ -180,13 +217,15 @@
           }
 
           ws.onclose = () => {
+            this.readonly = true
             console.log("minitouch closed")
             element.removeEventListener("mousedown", mouseDownListener)
             this.notify("minitouch closed")
           }
         },
         syncDisplay(canvas) {
-          let ws = new WebSocket('ws://' + location.host + "/minicap/broadcast")
+          let ws = new WebSocket('ws://' + location.host + "/minicap")
+          
           ws.onclose = () => {
             var warn = document.createElement("div")
             warn.innerText = "Websocket closed, Refresh to reload."
@@ -199,6 +238,7 @@
           }
           ws.onmessage = (message) => {
             if (message.data instanceof Blob) {
+              this.periodImageCount += 1 // help for calculate fps
               let blob = new Blob([message.data], {
                 type: 'image/jpeg'
               })

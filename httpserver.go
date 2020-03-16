@@ -965,82 +965,9 @@ func (server *Server) initHTTPServer() {
 		}
 	}).Methods("PUT")
 
-	m.HandleFunc("/minicap/broadcast", broadcastWebsocket()).Methods("GET")
-
-	m.HandleFunc("/minicap", singleFightNewerWebsocket(func(w http.ResponseWriter, r *http.Request, ws *websocket.Conn) {
-		ctx := r.Context()
-		defer ws.Close()
-
-		const wsWriteWait = 10 * time.Second
-		wsWrite := func(messageType int, data []byte) error {
-			ws.SetWriteDeadline(time.Now().Add(wsWriteWait))
-			return ws.WriteMessage(messageType, data)
-		}
-		wsWrite(websocket.TextMessage, []byte("restart @minicap service"))
-		if err := service.Restart("minicap"); err != nil && err != cmdctrl.ErrAlreadyRunning {
-			wsWrite(websocket.TextMessage, []byte("@minicap service start failed: "+err.Error()))
-			return
-		}
-
-		wsWrite(websocket.TextMessage, []byte("dial unix:@minicap"))
-		log.Printf("minicap connection: %v", r.RemoteAddr)
-		dataC := make(chan []byte, 10)
-
-		go func() {
-			defer close(dataC)
-			retries := 0
-			for {
-				if retries > 10 {
-					log.Println("unix @minicap connect failed")
-					dataC <- []byte("@minicap listen timeout, possibly minicap not installed")
-					break
-				}
-				conn, err := net.Dial("unix", "@minicap")
-				if err != nil {
-					retries++
-					log.Printf("dial @minicap err: %v, wait 0.5s", err)
-					select {
-					case <-ctx.Done():
-						return
-					case <-time.After(500 * time.Millisecond):
-					}
-					continue
-				}
-				dataC <- []byte("rotation " + strconv.Itoa(deviceRotation))
-				retries = 0 // connected, reset retries
-				if er := translateMinicap(conn, dataC, ctx); er == nil {
-					conn.Close()
-					log.Println("transfer closed")
-					break
-				} else {
-					conn.Close()
-					log.Println("minicap read error, try to read again")
-				}
-			}
-		}()
-		go func() {
-			for {
-				if _, _, err := ws.ReadMessage(); err != nil {
-					break
-				}
-			}
-		}()
-		for data := range dataC {
-			if string(data[:2]) == "\xff\xd8" { // jpeg data
-				if err := wsWrite(websocket.BinaryMessage, data); err != nil {
-					break
-				}
-				if err := wsWrite(websocket.TextMessage, []byte("data size: "+strconv.Itoa(len(data)))); err != nil {
-					break
-				}
-			} else {
-				if err := wsWrite(websocket.TextMessage, data); err != nil {
-					break
-				}
-			}
-		}
-		log.Println("stream finished")
-	})).Methods("GET")
+	minicapHandler := broadcastWebsocket()
+	m.HandleFunc("/minicap/broadcast", minicapHandler).Methods("GET")
+	m.HandleFunc("/minicap", minicapHandler).Methods("GET")
 
 	// TODO(ssx): perfer to delete
 	// FIXME(ssx): screenrecord is not good enough, need to change later
