@@ -380,11 +380,16 @@ func translateMinicap(conn net.Conn, jpgC chan []byte, ctx context.Context) erro
 func runDaemon() (cntxt *daemon.Context) {
 	cntxt = &daemon.Context{ // remove pid to prevent resource busy
 		PidFilePerm: 0644,
-		LogFileName: daemonLogPath,
 		LogFilePerm: 0640,
 		WorkDir:     "./",
 		Umask:       022,
 	}
+	// log might be no auth
+	if f, err := os.OpenFile(daemonLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+		f.Close()
+		cntxt.LogFileName = daemonLogPath
+	}
+
 	child, err := cntxt.Reborn()
 	if err != nil {
 		log.Fatal("Unale to run: ", err)

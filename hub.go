@@ -175,7 +175,7 @@ func (c *Client) readPump() {
 
 func broadcastWebsocket() func(http.ResponseWriter, *http.Request) {
 	hub := newHub()
-	go hub.run()
+	go hub.run() // start read images from unix:@minicap
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
