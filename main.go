@@ -64,10 +64,6 @@ const (
 	apkVersionName = "1.0.4"
 )
 
-func init() {
-	syslog.SetFlags(syslog.Lshortfile | syslog.LstdFlags)
-}
-
 // singleFight for http request
 // - minicap
 // - minitouch
@@ -418,6 +414,8 @@ func stopSelf() {
 }
 
 func init() {
+	syslog.SetFlags(syslog.Lshortfile | syslog.LstdFlags)
+
 	// Set timezone.
 	//
 	// Note that Android zoneinfo is stored in /system/usr/share/zoneinfo,
@@ -443,12 +441,16 @@ func init() {
 		}
 		time.Local = time.FixedZone(tz, offset*3600)
 	}
+}
 
+// lazyInit will be called in func:main
+func lazyInit() {
 	// watch rotation and send to rotatinPublisher
 	go _watchRotation()
 	if !isMinicapSupported() {
 		minicapSocketPath = "@minicapagent"
 	}
+
 	if !fileExists("/data/local/tmp/minitouch") {
 		minitouchSocketPath = "@minitouchagent"
 	} else if sdk, _ := strconv.Atoi(getCachedProperty("ro.build.version.sdk")); sdk > 28 { // Android Q..
@@ -566,15 +568,6 @@ func main() {
 		}
 	}
 
-	// if *fRequirements {
-	// 	log.Println("check dependencies")
-	// 	if err := installRequirements(); err != nil {
-	// 		// panic(err)
-	// 		log.Println("requirements not ready:", err)
-	// 		return
-	// 	}
-	// }
-
 	serverURL := *fServerURL
 	if serverURL != "" {
 		if !regexp.MustCompile(`https?://`).MatchString(serverURL) {
@@ -606,6 +599,7 @@ func main() {
 	}
 
 	fmt.Printf("atx-agent version %s\n", version)
+	lazyInit()
 
 	// show ip
 	outIp, err := getOutboundIP()
