@@ -28,8 +28,9 @@ class Qiniu:
         return info
 
 
-access_key = 'caBese-UQYXwQeigGqtdgwybP2Qh2AlDPdcEd42C'
-secret_key = 'SIG4DGyO45aseWSvOc9Be-ZkGrxoc-IpWlM5xts8'
+# Get key from https://portal.qiniu.com/user/key
+access_key = 'caBese-UQYXwQeigGqtdgwybP2Qh2AlDPdcEd42C' # here only-for-test
+secret_key = '........'
 
 zone = Zone(up_host='https://up.qiniup.com',
             up_host_backup='https://upload.qiniup.com',

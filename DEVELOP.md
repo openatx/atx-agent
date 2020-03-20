@@ -27,3 +27,6 @@ go generate
 # build for android binary
 GOOS=linux GOARCH=arm go build -tags vfs
 ```
+
+## 七牛
+感谢ken提供的Qiniu镜像服务。默认qiniu服务器会去github上拉镜像，但由于近期(2020-03-20)镜像服务越来越不稳定，所以目前改为在travis服务器上直接推送到七牛CDN
