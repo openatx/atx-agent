@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/md5"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -13,13 +14,11 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
-	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
 	"os/user"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -516,13 +515,21 @@ func main() {
 	cmdCurl := kingpin.Command("curl", "curl command")
 	subcmd.RegisterCurl(cmdCurl)
 
+	// CMD: frpc
+	cmdFrpc := kingpin.Command("frpc", "frpc command")
+	subcmd.RegisterFrpc(cmdFrpc)
+
 	// CMD: server
 	cmdServer := kingpin.Command("server", "start server")
 	fDaemon := cmdServer.Flag("daemon", "daemon mode").Short('d').Bool()
 	fStop := cmdServer.Flag("stop", "stop server").Bool()
 	cmdServer.Flag("port", "listen port").Default("7912").Short('p').IntVar(&listenPort) // Create on 2017/09/12
 	cmdServer.Flag("log", "log file path when in daemon mode").StringVar(&daemonLogPath)
-	fServerURL := cmdServer.Flag("server", "server url").Short('t').String()
+
+	fServer := cmdServer.Flag("server", "frpc token").Short('s').String()
+	fToken := cmdServer.Flag("token", "frpc server").Short('t').String()
+	fAuth := cmdServer.Flag("auth", "frpc auth").Short('a').String()
+
 	fNoUiautomator := cmdServer.Flag("nouia", "do not start uiautoamtor when start").Bool()
 
 	// CMD: version
@@ -540,6 +547,9 @@ func main() {
 	switch kingpin.Parse() {
 	case "curl":
 		subcmd.DoCurl()
+		return
+	case "frpc":
+		subcmd.DoFrpc()
 		return
 	case "version":
 		println(version)
@@ -566,18 +576,6 @@ func main() {
 		if !*fDaemon {
 			return
 		}
-	}
-
-	serverURL := *fServerURL
-	if serverURL != "" {
-		if !regexp.MustCompile(`https?://`).MatchString(serverURL) {
-			serverURL = "http://" + serverURL
-		}
-		u, err := url.Parse(serverURL)
-		if err != nil {
-			log.Fatal(err)
-		}
-		_ = u
 	}
 
 	if _, err := os.Stat("/sdcard/tmp"); err != nil {
@@ -622,6 +620,34 @@ func main() {
 		Environ: []string{"LD_LIBRARY_PATH=/data/local/tmp"},
 		Args: []string{"/data/local/tmp/minicap", "-S", "-P",
 			fmt.Sprintf("%dx%d@%dx%d/0", width, height, displayMaxWidthHeight, displayMaxWidthHeight)},
+	})
+
+	n := fmt.Sprintf("%x", md5.Sum([]byte(devInfo.Udid)))
+	service.Add("frpc", cmdctrl.CommandInfo{
+		MaxRetries: 2,
+		Shell:      false,
+		ArgsFunc: func() ([]string, error) {
+			args := []string{"/data/local/tmp/atx-agent", "frpc",
+				"-l", strconv.Itoa(listenPort),
+				"-n", n, "--sd", n,
+				"--ue", "--uc",
+				"-s", *fServer, "-t", *fToken}
+			if *fAuth != "" {
+				strs := strings.Split(*fAuth, ":")
+				if len(strs) >= 2 {
+					args = append(args, []string{
+						"--http_user=" + strs[0],
+						"--http_pass=" + strs[1],
+					}...)
+				} else {
+					args = append(args, []string{
+						"--http_user=" + *fAuth,
+						"--http_pass=" + *fAuth,
+					}...)
+				}
+			}
+			return args, nil
+		},
 	})
 
 	service.Add("apkagent", cmdctrl.CommandInfo{
@@ -706,6 +732,13 @@ func main() {
 		if err := service.Start("uiautomator"); err != nil {
 			log.Println("uiautomator start failed:", err)
 		}
+	}
+
+	if *fServer != "" {
+		if err := service.Start("frpc"); err != nil {
+			log.Println("frpc start failed:", err)
+		}
+		log.Printf("you can visit with [%s]", n)
 	}
 
 	server := NewServer()

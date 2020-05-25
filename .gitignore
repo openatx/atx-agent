@@ -21,3 +21,4 @@ testcmd/
 *.exe.old
 *.apk
 go.sum
+.vscode
