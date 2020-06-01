@@ -22,7 +22,8 @@ type OwnerInfo struct {
 }
 
 type DeviceInfo struct {
-	Udid                   string                `json:"udid,omitempty"`       // Unique device identifier
+	Udid                   string                `json:"udid,omitempty"` // Unique device identifier
+	AndroidId              string                `json:"android_id,omitempty"`
 	PropertyId             string                `json:"propertyId,omitempty"` // For device managerment, eg: HIH-PHO-1122
 	Version                string                `json:"version,omitempty"`    // ro.build.version.release
 	Serial                 string                `json:"serial,omitempty"`     // ro.serialno

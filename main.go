@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/md5"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -622,14 +621,13 @@ func main() {
 			fmt.Sprintf("%dx%d@%dx%d/0", width, height, displayMaxWidthHeight, displayMaxWidthHeight)},
 	})
 
-	n := fmt.Sprintf("%x", md5.Sum([]byte(devInfo.Udid)))
 	service.Add("frpc", cmdctrl.CommandInfo{
 		MaxRetries: 2,
 		Shell:      false,
 		ArgsFunc: func() ([]string, error) {
 			args := []string{"/data/local/tmp/atx-agent", "frpc",
 				"-l", strconv.Itoa(listenPort),
-				"-n", n, "--sd", n,
+				"-n", devInfo.Udid, "--sd", devInfo.Udid,
 				"--ue", "--uc",
 				"-s", *fServer, "-t", *fToken}
 			if *fAuth != "" {

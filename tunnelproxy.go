@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/md5"
 	"fmt"
 	"log"
 	"math"
@@ -36,6 +37,15 @@ func getDeviceInfo() *DeviceInfo {
 	devInfo.Battery = &battery
 	devInfo.Port = listenPort
 
+	devInfo.AndroidId = func() string {
+		out, err := runShellOutput("settings get secure android_id")
+		if err != nil {
+			log.Println("get android_id error:", err)
+			return ""
+		}
+		return strings.Trim(string(out), " \n")
+	}()
+
 	memory, err := androidutils.MemoryInfo()
 	if err != nil {
 		log.Println("get memory error:", err)
@@ -58,12 +68,13 @@ func getDeviceInfo() *DeviceInfo {
 		}
 	}
 
-	// Udid is ${Serial}-${MacAddress}-${model}
-	udid := fmt.Sprintf("%s-%s-%s",
+	// Udid is ${Serial}-${MacAddress}-${model}-${android_id}
+	udid := fmt.Sprintf("%s-%s-%s-%s",
 		getCachedProperty("ro.serialno"),
 		devInfo.HWAddr,
-		strings.Replace(getCachedProperty("ro.product.model"), " ", "_", -1))
-	devInfo.Udid = udid
+		strings.Replace(getCachedProperty("ro.product.model"), " ", "_", -1),
+		devInfo.AndroidId)
+	devInfo.Udid = fmt.Sprintf("%x", md5.Sum([]byte(udid)))
 	currentDeviceInfo = devInfo
 	return currentDeviceInfo
 }

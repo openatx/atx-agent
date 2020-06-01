@@ -22,3 +22,4 @@ testcmd/
 *.apk
 go.sum
 .vscode
+atx-agent*
