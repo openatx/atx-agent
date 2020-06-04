@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"os/user"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -36,6 +37,7 @@ import (
 )
 
 var (
+	expath, _   = GetExDir()
 	service     = cmdctrl.New()
 	downManager = newDownloadManager()
 	upgrader    = websocket.Upgrader{
@@ -174,6 +176,17 @@ func GoFunc(f func() error) chan error {
 	return ch
 }
 
+// Get executable directory based on current running binary
+func GetExDir() (dir string, err error) {
+	ex, err := os.Executable()
+	if err != nil {
+		log.Println("Failed to get executable directory.")
+		return "", err
+	}
+	dir = filepath.Dir(ex)
+	return dir, err
+}
+
 type MinicapInfo struct {
 	Width    int     `json:"width"`
 	Height   int     `json:"height"`
@@ -194,7 +207,7 @@ func updateMinicapRotation(rotation int) {
 	}
 	devInfo := getDeviceInfo()
 	width, height := devInfo.Display.Width, devInfo.Display.Height
-	service.UpdateArgs("minicap", "/data/local/tmp/minicap", "-S", "-P",
+	service.UpdateArgs("minicap", fmt.Sprintf("%v/%v", expath, "minicap"), "-S", "-P",
 		fmt.Sprintf("%dx%d@%dx%d/%d", width, height, displayMaxWidthHeight, displayMaxWidthHeight, rotation))
 	if running {
 		service.Start("minicap")
@@ -448,8 +461,7 @@ func lazyInit() {
 	if !isMinicapSupported() {
 		minicapSocketPath = "@minicapagent"
 	}
-
-	if !fileExists("/data/local/tmp/minitouch") {
+	if !fileExists(path.Join(expath, "minitouch")) {
 		minitouchSocketPath = "@minitouchagent"
 	} else if sdk, _ := strconv.Atoi(getCachedProperty("ro.build.version.sdk")); sdk > 28 { // Android Q..
 		minitouchSocketPath = "@minitouchagent"
@@ -496,7 +508,7 @@ func killAgentProcess() error {
 		}
 		if len(p.Cmdline) >= 2 {
 			// cmdline: /data/local/tmp/atx-agent server -d
-			if filepath.Base(p.Cmdline[0]) == "atx-agent" && p.Cmdline[1] == "server" {
+			if filepath.Base(p.Cmdline[0]) == filepath.Base(os.Args[0]) && p.Cmdline[1] == "server" {
 				log.Infof("kill running atx-agent (pid=%d)", p.Pid)
 				p.Kill()
 			}
@@ -597,11 +609,14 @@ func main() {
 
 	fmt.Printf("atx-agent version %s\n", version)
 	lazyInit()
-
+	devInfo := getDeviceInfo()
 	// show ip
 	outIp, err := getOutboundIP()
 	if err == nil {
 		fmt.Printf("Listen on http://%v:%d\n", outIp, listenPort)
+		if *fServer != "" {
+			fmt.Printf("Listen on http://%s.cc.ipviewer.cn", devInfo.Udid)
+		}
 	} else {
 		fmt.Printf("Internet is not connected.")
 	}
@@ -612,12 +627,10 @@ func main() {
 	}
 
 	// minicap + minitouch
-	devInfo := getDeviceInfo()
-
 	width, height := devInfo.Display.Width, devInfo.Display.Height
 	service.Add("minicap", cmdctrl.CommandInfo{
-		Environ: []string{"LD_LIBRARY_PATH=/data/local/tmp"},
-		Args: []string{"/data/local/tmp/minicap", "-S", "-P",
+		Environ: []string{fmt.Sprintf("LD_LIBRARY_PATH=%v", expath)},
+		Args: []string{fmt.Sprintf("%v/%v", expath, "minicap"), "-S", "-P",
 			fmt.Sprintf("%dx%d@%dx%d/0", width, height, displayMaxWidthHeight, displayMaxWidthHeight)},
 	})
 
@@ -625,7 +638,11 @@ func main() {
 		MaxRetries: 2,
 		Shell:      false,
 		ArgsFunc: func() ([]string, error) {
-			args := []string{os.Args[0], "frpc",
+			ex, err := os.Executable()
+			if err != nil {
+				return []string{}, err
+			}
+			args := []string{ex, "frpc",
 				"-l", strconv.Itoa(listenPort),
 				"-n", devInfo.Udid, "--sd", devInfo.Udid,
 				"--ue", "--uc",
@@ -669,7 +686,7 @@ func main() {
 
 	service.Add("minitouch", cmdctrl.CommandInfo{
 		MaxRetries: 2,
-		Args:       []string{"/data/local/tmp/minitouch"},
+		Args:       []string{fmt.Sprintf("%v/%v", expath, "minitouch")},
 		Shell:      true,
 	})
 

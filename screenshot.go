@@ -8,8 +8,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-func screenshotWithMinicap(filename, thumbnailSize string) (err error) {
-	output, err := runShellOutput("LD_LIBRARY_PATH=/data/local/tmp", "/data/local/tmp/minicap", "-i")
+func Screenshot(filename string, thumbnailSize string) (err error) {
+	ldlibrarypath := fmt.Sprintf("LD_LIBRARY_PATH=%v", expath)
+	minicapbin := fmt.Sprintf("%v/%v", expath, "minicap")
+	output, err := runShellOutput(ldlibrarypath, minicapbin, "-i")
 	if err != nil {
 		return
 	}
@@ -22,8 +24,30 @@ func screenshotWithMinicap(filename, thumbnailSize string) (err error) {
 		thumbnailSize = fmt.Sprintf("%dx%d", f.Width, f.Height)
 	}
 	if _, err = runShell(
-		"LD_LIBRARY_PATH=/data/local/tmp",
-		"/data/local/tmp/minicap",
+		ldlibrarypath,
+		minicapbin,
+		"-P", fmt.Sprintf("%dx%d@%s/%d", f.Width, f.Height, thumbnailSize, f.Rotation),
+		"-s", ">"+filename); err != nil {
+		return
+	}
+	return nil
+}
+func screenshotWithMinicap(filename, thumbnailSize string) (err error) {
+	output, err := runShellOutput(fmt.Sprintf("LD_LIBRARY_PATH=%v", expath), fmt.Sprintf("%v/%v", expath, "minicap"), "-i")
+	if err != nil {
+		return
+	}
+	var f MinicapInfo
+	if er := json.Unmarshal([]byte(output), &f); er != nil {
+		err = fmt.Errorf("minicap not supported: %v", er)
+		return
+	}
+	if thumbnailSize == "" {
+		thumbnailSize = fmt.Sprintf("%dx%d", f.Width, f.Height)
+	}
+	if _, err = runShell(
+		fmt.Sprintf("LD_LIBRARY_PATH=%v", expath),
+		fmt.Sprintf("%v/%v", expath, "minicap"),
 		"-P", fmt.Sprintf("%dx%d@%s/%d", f.Width, f.Height, thumbnailSize, f.Rotation),
 		"-s", ">"+filename); err != nil {
 		err = errors.Wrap(err, "minicap")
@@ -39,7 +63,7 @@ func screenshotWithScreencap(filename string) (err error) {
 }
 
 func isMinicapSupported() bool {
-	output, err := runShellOutput("LD_LIBRARY_PATH=/data/local/tmp", "/data/local/tmp/minicap", "-i")
+	output, err := runShellOutput(fmt.Sprintf("LD_LIBRARY_PATH=%v", expath), fmt.Sprintf("%v/%v", expath, "minicap"), "-i")
 	if err != nil {
 		return false
 	}
@@ -48,8 +72,8 @@ func isMinicapSupported() bool {
 		return false
 	}
 	output, err = runShell(
-		"LD_LIBRARY_PATH=/data/local/tmp",
-		"/data/local/tmp/minicap",
+		fmt.Sprintf("LD_LIBRARY_PATH=%v", expath),
+		fmt.Sprintf("%v/%v", expath, "minicap"),
 		"-P", fmt.Sprintf("%dx%d@%dx%d/%d", f.Width, f.Height, f.Width, f.Height, f.Rotation),
 		"-s", "2>/dev/null")
 	if err != nil {
