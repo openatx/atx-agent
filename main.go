@@ -625,7 +625,7 @@ func main() {
 		MaxRetries: 2,
 		Shell:      false,
 		ArgsFunc: func() ([]string, error) {
-			args := []string{"/data/local/tmp/atx-agent", "frpc",
+			args := []string{os.Args[0], "frpc",
 				"-l", strconv.Itoa(listenPort),
 				"-n", devInfo.Udid, "--sd", devInfo.Udid,
 				"--ue", "--uc",
@@ -736,7 +736,7 @@ func main() {
 		if err := service.Start("frpc"); err != nil {
 			log.Println("frpc start failed:", err)
 		}
-		log.Printf("you can visit with [%s]", n)
+		log.Printf("you can visit with [%s]", devInfo.Udid)
 	}
 
 	server := NewServer()
