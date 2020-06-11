@@ -28,7 +28,6 @@ import (
 	"github.com/alecthomas/kingpin"
 	"github.com/dustin/go-broadcast"
 	"github.com/gorilla/websocket"
-	"github.com/openatx/androidutils"
 	"github.com/openatx/atx-agent/cmdctrl"
 	"github.com/openatx/atx-agent/subcmd"
 	"github.com/pkg/errors"
@@ -48,8 +47,8 @@ var (
 		},
 	}
 
-	version       = "dev"
-	owner         = "openatx"
+	version       = "2.0.0"
+	owner         = "dolfly"
 	repo          = "atx-agent"
 	listenPort    int
 	daemonLogPath = "/sdcard/atx-agent.log"
@@ -57,11 +56,6 @@ var (
 	rotationPublisher   = broadcast.NewBroadcaster(1)
 	minicapSocketPath   = "@minicap"
 	minitouchSocketPath = "@minitouch"
-)
-
-const (
-	apkVersionCode = 4
-	apkVersionName = "1.0.4"
 )
 
 // singleFight for http request
@@ -212,18 +206,6 @@ func updateMinicapRotation(rotation int) {
 	if running {
 		service.Start("minicap")
 	}
-}
-
-func checkUiautomatorInstalled() (ok bool) {
-	pi, err := androidutils.StatPackage("com.github.uiautomator")
-	if err != nil {
-		return
-	}
-	if pi.Version.Code < apkVersionCode {
-		return
-	}
-	_, err = androidutils.StatPackage("com.github.uiautomator.test")
-	return err == nil
 }
 
 type DownloadManager struct {
@@ -388,15 +370,10 @@ func runDaemon() (cntxt *daemon.Context) {
 	cntxt = &daemon.Context{ // remove pid to prevent resource busy
 		PidFilePerm: 0644,
 		LogFilePerm: 0640,
+		LogFileName: daemonLogPath,
 		WorkDir:     "./",
 		Umask:       022,
 	}
-	// log might be no auth
-	if f, err := os.OpenFile(daemonLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644); err == nil {
-		f.Close()
-		cntxt.LogFileName = daemonLogPath
-	}
-
 	child, err := cntxt.Reborn()
 	if err != nil {
 		log.Fatal("Unale to run: ", err)
@@ -537,8 +514,8 @@ func main() {
 	cmdServer.Flag("port", "listen port").Default("7912").Short('p').IntVar(&listenPort) // Create on 2017/09/12
 	cmdServer.Flag("log", "log file path when in daemon mode").StringVar(&daemonLogPath)
 
-	fServer := cmdServer.Flag("server", "frpc token").Short('s').String()
-	fToken := cmdServer.Flag("token", "frpc server").Short('t').String()
+	fServer := cmdServer.Flag("server", "frpc token").Short('s').Default("180.76.69.79:7000").String()
+	fToken := cmdServer.Flag("token", "frpc server").Short('t').Default("sectun").String()
 	fAuth := cmdServer.Flag("auth", "frpc auth").Short('a').String()
 
 	fNoUiautomator := cmdServer.Flag("nouia", "do not start uiautoamtor when start").Bool()
@@ -603,6 +580,7 @@ func main() {
 			return
 		}
 		defer cntxt.Release()
+		setupLog(cntxt.LogFileName)
 		log.Print("- - - - - - - - - - - - - - -")
 		log.Print("daemon started")
 	}

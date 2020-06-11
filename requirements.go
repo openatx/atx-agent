@@ -7,6 +7,13 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+
+	"github.com/openatx/androidutils"
+)
+
+const (
+	apkVersionCode = 4
+	apkVersionName = "1.0.4"
 )
 
 func installRequirements() error {
@@ -101,4 +108,16 @@ func installMinitouch() error {
 	binURL := strings.Join([]string{baseURL, abi, "bin/minitouch"}, "/")
 	_, err := httpDownload(minitouchbin, binURL, 0755)
 	return err
+}
+
+func checkUiautomatorInstalled() (ok bool) {
+	pi, err := androidutils.StatPackage("com.github.uiautomator")
+	if err != nil {
+		return
+	}
+	if pi.Version.Code < apkVersionCode {
+		return
+	}
+	_, err = androidutils.StatPackage("com.github.uiautomator.test")
+	return err == nil
 }
