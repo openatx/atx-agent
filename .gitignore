@@ -23,3 +23,5 @@ testcmd/
 go.sum
 .vscode
 atx-agent*
+filebrower.db
+latest

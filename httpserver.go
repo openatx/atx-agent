@@ -22,15 +22,14 @@ import (
 	"time"
 
 	"github.com/openatx/atx-agent/jsonrpc"
+	"github.com/rs/cors"
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
-	"github.com/mholt/archiver"
 	"github.com/openatx/androidutils"
 	"github.com/openatx/atx-agent/cmdctrl"
 	"github.com/prometheus/procfs"
-	"github.com/rs/cors"
 )
 
 type Server struct {
@@ -47,7 +46,7 @@ func NewServer() *Server {
 func (server *Server) initHTTPServer() {
 	m := mux.NewRouter()
 
-	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	m.HandleFunc("/home", func(w http.ResponseWriter, r *http.Request) {
 		renderHTML(w, "index.html")
 	})
 
@@ -677,7 +676,7 @@ func (server *Server) initHTTPServer() {
 		}
 
 		if isDir {
-			err = archiver.Zip.Read(file, target)
+			//err = archiver.Zip.Read(file, target)
 		} else {
 			err = copyToFile(file, target)
 		}
@@ -1070,7 +1069,7 @@ func (server *Server) initHTTPServer() {
 
 	screenshotIndex := -1
 	nextScreenshotFilename := func() string {
-		targetFolder := "/data/local/tmp/minicap-images"
+		targetFolder := filepath.Join(expath, "minicap-images")
 		if _, err := os.Stat(targetFolder); err != nil {
 			os.MkdirAll(targetFolder, 0755)
 		}
@@ -1153,6 +1152,12 @@ func (server *Server) initHTTPServer() {
 		http.Error(w, "wlan0 have no ip address", 500)
 	})
 	m.Handle("/assets/{(.*)}", http.StripPrefix("/assets", http.FileServer(Assets)))
+
+	fileroot := filepath.Join(expath, "files")
+	if _, err := os.Stat(fileroot); err != nil {
+		os.MkdirAll(fileroot, 0755)
+	}
+	m.PathPrefix("/").Handler(fbHandler(fileroot))
 
 	var handler = cors.New(cors.Options{
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE"},

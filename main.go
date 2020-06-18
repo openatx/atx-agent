@@ -47,7 +47,7 @@ var (
 		},
 	}
 
-	version       = "2.0.0"
+	version       = "v2.0.0"
 	owner         = "dolfly"
 	repo          = "atx-agent"
 	listenPort    int
