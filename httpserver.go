@@ -1157,6 +1157,10 @@ func (server *Server) initHTTPServer() {
 	if _, err := os.Stat(fileroot); err != nil {
 		os.MkdirAll(fileroot, 0755)
 	}
+	lnksdcard := filepath.Join(fileroot, "sdcard")
+	if _, err := os.Stat(lnksdcard); err != nil {
+		os.Symlink("/sdcard", lnksdcard)
+	}
 	m.PathPrefix("/").Handler(fbHandler(fileroot))
 
 	var handler = cors.New(cors.Options{
