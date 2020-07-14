@@ -31,9 +31,9 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/openatx/androidutils"
 	"github.com/openatx/atx-agent/cmdctrl"
+	"github.com/openatx/atx-agent/logger"
 	"github.com/openatx/atx-agent/subcmd"
 	"github.com/pkg/errors"
-	"github.com/qiniu/log"
 	"github.com/sevlyar/go-daemon"
 )
 
@@ -52,11 +52,12 @@ var (
 	owner         = "openatx"
 	repo          = "atx-agent"
 	listenPort    int
-	daemonLogPath = "/sdcard/atx-agent.log"
+	daemonLogPath = "/sdcard/atx-agent.daemon.log"
 
 	rotationPublisher   = broadcast.NewBroadcaster(1)
 	minicapSocketPath   = "@minicap"
 	minitouchSocketPath = "@minitouch"
+	log                 = logger.Default
 )
 
 const (
@@ -381,7 +382,7 @@ func runDaemon() (cntxt *daemon.Context) {
 		Umask:       022,
 	}
 	// log might be no auth
-	if f, err := os.OpenFile(daemonLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+	if f, err := os.OpenFile(daemonLogPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644); err == nil { // |os.O_APPEND
 		f.Close()
 		cntxt.LogFileName = daemonLogPath
 	}
@@ -394,6 +395,10 @@ func runDaemon() (cntxt *daemon.Context) {
 		return nil // return nil indicate program run in parent
 	}
 	return cntxt
+}
+
+func setupLogrotate() {
+	logger.SetOutputFile("/sdcard/atx-agent.log")
 }
 
 func stopSelf() {
@@ -594,11 +599,12 @@ func main() {
 			return
 		}
 		defer cntxt.Release()
-		log.Print("- - - - - - - - - - - - - - -")
-		log.Print("daemon started")
+		log.Println("- - - - - - - - - - - - - - -")
+		log.Println("daemon started")
+		setupLogrotate()
 	}
 
-	fmt.Printf("atx-agent version %s\n", version)
+	log.Printf("atx-agent version %s\n", version)
 	lazyInit()
 
 	// show ip
