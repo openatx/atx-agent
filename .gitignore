@@ -21,3 +21,5 @@ testcmd/
 *.exe.old
 *.apk
 go.sum
+.DS_Store
+dist/
