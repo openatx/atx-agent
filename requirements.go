@@ -31,7 +31,7 @@ func installUiautomatorAPK() error {
 	if checkUiautomatorInstalled() {
 		return nil
 	}
-	baseURL := "https://github.com/openatx/android-uiautomator-server/releases/download/" + apkVersionName
+	baseURL := filepath.Join(baseurl, apkVersionName)
 	appdebug := filepath.Join(expath, "app-debug.apk")
 	appdebugtest := filepath.Join(expath, "app-debug-test.apk")
 	filepath.Join(expath, "app-debug.apk")
@@ -69,7 +69,7 @@ func installMinicap() error {
 	os.Remove(minicapbin)
 	os.Remove(minicapso)
 
-	minicapSource := "https://github.com/codeskyblue/stf-binaries/raw/master/node_modules/minicap-prebuilt/prebuilt"
+	minicapSource := filepath.Join(baseurl, "stf-binaries/node_modules/minicap-prebuilt/prebuilt")
 	propOutput, err := runShell("getprop")
 	if err != nil {
 		return err
@@ -103,7 +103,7 @@ func installMinicap() error {
 
 func installMinitouch() error {
 	minitouchbin := filepath.Join(expath, "minitouch")
-	baseURL := "https://github.com/codeskyblue/stf-binaries/raw/master/node_modules/minitouch-prebuilt/prebuilt"
+	baseURL := filepath.Join(baseurl, "stf-binaries/node_modules/minitouch-prebuilt/prebuilt")
 	abi := getCachedProperty("ro.product.cpu.abi")
 	binURL := strings.Join([]string{baseURL, abi, "bin/minitouch"}, "/")
 	_, err := httpDownload(minitouchbin, binURL, 0755)
