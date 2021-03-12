@@ -51,7 +51,7 @@ var (
 	version       = "dev"
 	owner         = "openatx"
 	repo          = "atx-agent"
-	listenPort    int
+	listenAddr    string
 	daemonLogPath = "/sdcard/atx-agent.daemon.log"
 
 	rotationPublisher   = broadcast.NewBroadcaster(1)
@@ -405,6 +405,7 @@ func stopSelf() {
 	// kill previous daemon first
 	log.Println("stop server self")
 
+	listenPort, _ := strconv.Atoi(strings.Split(listenAddr, ":")[1])
 	client := http.Client{Timeout: 3 * time.Second}
 	_, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/stop", listenPort))
 	if err == nil {
@@ -525,7 +526,7 @@ func main() {
 	cmdServer := kingpin.Command("server", "start server")
 	fDaemon := cmdServer.Flag("daemon", "daemon mode").Short('d').Bool()
 	fStop := cmdServer.Flag("stop", "stop server").Bool()
-	cmdServer.Flag("port", "listen port").Default("7912").Short('p').IntVar(&listenPort) // Create on 2017/09/12
+	cmdServer.Flag("addr", "listen port").Default(":7912").StringVar(&listenAddr) // Create on 2017/09/12
 	cmdServer.Flag("log", "log file path when in daemon mode").StringVar(&daemonLogPath)
 	fServerURL := cmdServer.Flag("server", "server url").Short('t').String()
 	fNoUiautomator := cmdServer.Flag("nouia", "do not start uiautoamtor when start").Bool()
@@ -595,7 +596,7 @@ func main() {
 
 		cntxt := runDaemon()
 		if cntxt == nil {
-			log.Printf("atx-agent listening on %v:%d", mustGetOoutboundIP(), listenPort)
+			log.Printf("atx-agent listening on ", listenAddr)
 			return
 		}
 		defer cntxt.Release()
@@ -610,12 +611,12 @@ func main() {
 	// show ip
 	outIp, err := getOutboundIP()
 	if err == nil {
-		fmt.Printf("Listen on http://%v:%d\n", outIp, listenPort)
+		fmt.Printf("Device IP: %v\n", outIp)
 	} else {
 		fmt.Printf("Internet is not connected.")
 	}
 
-	listener, err := net.Listen("tcp", ":"+strconv.Itoa(listenPort))
+	listener, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		log.Fatal(err)
 	}
