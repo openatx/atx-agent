@@ -596,7 +596,7 @@ func main() {
 
 		cntxt := runDaemon()
 		if cntxt == nil {
-			log.Printf("atx-agent listening on ", listenAddr)
+			log.Printf("atx-agent listening on %v", listenAddr)
 			return
 		}
 		defer cntxt.Release()
