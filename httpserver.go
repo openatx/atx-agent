@@ -1104,7 +1104,7 @@ func (server *Server) initHTTPServer() {
 		method := "screencap"
 		if getCachedProperty("ro.product.cpu.abi") == "x86" { // android emulator
 			method = "screencap"
-		} else if fileExists("/data/local/tmp/minicap") && fileExists("/data/local/tmp/minicap.so") && r.FormValue("minicap") != "false" && strings.ToLower(getCachedProperty("ro.product.manufacturer")) != "meizu" {
+		} else if fileExists(filepath.Join(expath, "minicap")) && fileExists(filepath.Join(expath, "minicap.so")) && r.FormValue("minicap") != "false" && strings.ToLower(getCachedProperty("ro.product.manufacturer")) != "meizu" {
 			method = "minicap"
 		} else if service.Running("uiautomator") {
 			method = "uiautomator"

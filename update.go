@@ -18,7 +18,8 @@ import (
 	"github.com/mitchellh/ioprogress"
 )
 
-var baseurl string = "https://safe-sig.bj.bcebos.com/opinit/atx-agent"
+//var baseurl string = "https://safe-sig.bj.bcebos.com/opinit/atx-agent"
+var baseurl string = "http://192.168.2.250/atx-agent"
 
 func formatString(format string, params map[string]string) string {
 	for k, v := range params {

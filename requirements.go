@@ -31,7 +31,7 @@ func installUiautomatorAPK() error {
 	if checkUiautomatorInstalled() {
 		return nil
 	}
-	baseURL := filepath.Join(baseurl, apkVersionName)
+	baseURL := filepath.Join(baseurl, "uiautomator", apkVersionName)
 	appdebug := filepath.Join(expath, "app-debug.apk")
 	appdebugtest := filepath.Join(expath, "app-debug-test.apk")
 	filepath.Join(expath, "app-debug.apk")

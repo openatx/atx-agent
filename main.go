@@ -519,7 +519,6 @@ func main() {
 	fAuth := cmdServer.Flag("auth", "frpc auth").Short('a').String()
 
 	fNoUiautomator := cmdServer.Flag("nouia", "do not start uiautoamtor when start").Bool()
-
 	// CMD: version
 	kingpin.Command("version", "show version")
 
