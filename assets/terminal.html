@@ -1,19 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
   <link rel="icon" href="/assets/terminal.ico?v=1">
-  <title>atx-agent terminal</title>
+  <title>Terminal</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@2.9.2/dist/xterm.min.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@2.9.2/dist/addons/fullscreen/fullscreen.min.css">
   <style>
     * {
       margin: 0;
     }
-    
     html,
     body {
       height: 100%;
@@ -38,7 +36,6 @@
     var term;
     var websocket = new WebSocket("ws://" + location.host + "/term");
     websocket.binaryType = "arraybuffer";
-
     function ab2str(buf) {
       return String.fromCharCode.apply(null, new Uint8Array(buf));
     }

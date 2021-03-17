@@ -5,15 +5,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
-  <title>Remote control</title>
+  <title>极简手机远程控制</title>
 </head>
 
 <body>
   <div id="app">
-    <h3>极简手机远程控制 <small style="color: gray" v-text="message"></small></h3>
     <div style="margin: 5px 0px">
-      <span style="background-color:blueviolet; color:whilte" v-show="readonly">ReadOnly</span>
-      <button @click="refreshImg">刷新画面 fps: <span v-text="fps.toFixed(1)"></span></button>
+      <span style="background-color:blueviolet; color:whilte" v-show="readonly">只读</span>
+      <button @click="refreshImg">刷新画面FPS: <span v-text="fps.toFixed(1)"></span></button>
       <button @click="keyevent('HOME')">HOME</button>
       <input v-model="command" placeholder="shell command" v-on:keyup.enter="runCommand">
     </div>
@@ -21,12 +20,10 @@
       <img ref="display" style="border: 1px solid blue;" />
     </div>
   </div>
-
   <script src="//cdn.jsdelivr.net/g/vue@2.1.10,jquery@3.1.1"></script>
   <script>
     const BLANK_IMG =
       'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='
-
     /**
       * Rotation affects the screen as follows:
       *
@@ -121,14 +118,12 @@
         const img = this.img = this.$refs.display
         img.style.maxWidth = "800px"
         img.style.maxHeight = window.innerHeight - img.getBoundingClientRect().top + "px"
-
         // img.src = `http://${location.host}/screenshot`
         // img.onload = () => {
         //   this.notify("image loaded")
         // }
         this.syncDisplay()
         this.syncTouchpad()
-
         // calculate fps
         setInterval(()=>{
           this.fps = this.periodImageCount / 0.5

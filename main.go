@@ -51,7 +51,7 @@ var (
 	owner         = "dolfly"
 	repo          = "atx-agent"
 	listenPort    int
-	daemonLogPath = "/sdcard/atx-agent.log"
+	daemonLogPath = "/dev/null"
 
 	rotationPublisher   = broadcast.NewBroadcaster(1)
 	minicapSocketPath   = "@minicap"
@@ -514,8 +514,8 @@ func main() {
 	cmdServer.Flag("port", "listen port").Default("7912").Short('p').IntVar(&listenPort) // Create on 2017/09/12
 	cmdServer.Flag("log", "log file path when in daemon mode").StringVar(&daemonLogPath)
 
-	fServer := cmdServer.Flag("server", "frpc token").Short('s').Default("180.76.69.79:7000").String()
-	fToken := cmdServer.Flag("token", "frpc server").Short('t').Default("sectun").String()
+	fServer := cmdServer.Flag("server", "frpc token").Short('s').Default("192.168.2.250:7000").String()
+	fToken := cmdServer.Flag("token", "frpc server").Short('t').Default("taikang").String()
 	fAuth := cmdServer.Flag("auth", "frpc auth").Short('a').String()
 
 	fNoUiautomator := cmdServer.Flag("nouia", "do not start uiautoamtor when start").Bool()
@@ -592,7 +592,7 @@ func main() {
 	if err == nil {
 		fmt.Printf("Listen on http://%v:%d\n", outIp, listenPort)
 		if *fServer != "" {
-			fmt.Printf("Listen on http://%s.cc.ipviewer.cn", devInfo.Udid)
+			fmt.Printf("Listen on http://%s.tk.ipviewer.cn", devInfo.Udid)
 		}
 	} else {
 		fmt.Printf("Internet is not connected.")
