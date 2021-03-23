@@ -13,13 +13,11 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
-	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
 	"os/user"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -528,7 +526,7 @@ func main() {
 	fStop := cmdServer.Flag("stop", "stop server").Bool()
 	cmdServer.Flag("addr", "listen port").Default(":7912").StringVar(&listenAddr) // Create on 2017/09/12
 	cmdServer.Flag("log", "log file path when in daemon mode").StringVar(&daemonLogPath)
-	fServerURL := cmdServer.Flag("server", "server url").Short('t').String()
+	// fServerURL := cmdServer.Flag("server", "server url").Short('t').String()
 	fNoUiautomator := cmdServer.Flag("nouia", "do not start uiautoamtor when start").Bool()
 
 	// CMD: version
@@ -574,17 +572,17 @@ func main() {
 		}
 	}
 
-	serverURL := *fServerURL
-	if serverURL != "" {
-		if !regexp.MustCompile(`https?://`).MatchString(serverURL) {
-			serverURL = "http://" + serverURL
-		}
-		u, err := url.Parse(serverURL)
-		if err != nil {
-			log.Fatal(err)
-		}
-		_ = u
-	}
+	// serverURL := *fServerURL
+	// if serverURL != "" {
+	// 	if !regexp.MustCompile(`https?://`).MatchString(serverURL) {
+	// 		serverURL = "http://" + serverURL
+	// 	}
+	// 	u, err := url.Parse(serverURL)
+	// 	if err != nil {
+	// 		log.Fatal(err)
+	// 	}
+	// 	_ = u
+	// }
 
 	if _, err := os.Stat("/sdcard/tmp"); err != nil {
 		os.MkdirAll("/sdcard/tmp", 0755)
@@ -680,7 +678,8 @@ func main() {
 		Args: []string{"am", "instrument", "-w", "-r",
 			"-e", "debug", "false",
 			"-e", "class", "com.github.uiautomator.stub.Stub",
-			"com.github.uiautomator.test/android.support.test.runner.AndroidJUnitRunner"},
+			"com.github.uiautomator.test/androidx.test.runner.AndroidJUnitRunner"}, // update for android-uiautomator-server.apk>=2.3.2
+		//"com.github.uiautomator.test/android.support.test.runner.AndroidJUnitRunner"},
 		Stdout:          os.Stdout,
 		Stderr:          os.Stderr,
 		MaxRetries:      1, // only once
