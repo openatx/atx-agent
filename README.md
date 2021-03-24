@@ -1,5 +1,5 @@
 # atx-agent
-[![Build Status](https://travis-ci.org/openatx/atx-agent.svg?branch=master)](https://travis-ci.org/openatx/atx-agent)
+[![Build Status](https://travis-ci.org/dolfly/atx-agent.svg?branch=master)](https://travis-ci.org/dolfly/atx-agent)
 
 这个项目的主要目的是为了屏蔽不同安卓机器的差异，然后开放出统一的HTTP接口供 [openatx/uiautomator2](https://github.com/openatx/uiautomator2)使用。项目最终会发布成一个二进制程序，运行在Android系统的后台。
 
@@ -16,7 +16,7 @@
 更多内容查看 [DEVELOP.md](DEVELOP.md)
 
 # Installation
-从<https://github.com/openatx/atx-agent/releases>下载以`linux_armv7.tar.gz`结尾的二进制包。绝大部分手机都是linux-arm架构的。
+从<https://github.com/dolfly/atx-agent/releases>下载以`linux_armv7.tar.gz`结尾的二进制包。绝大部分手机都是linux-arm架构的。
 
 解压出`atx-agent`文件，然后打开控制台
 ```bash
@@ -467,8 +467,6 @@ Websocket连接 `$DEVICE_URL/minitouch`, 一行行的按照JSON的格式写入
 2. 补全接口文档
 3. 内置的网页adb shell的安全问题
 
-# Logs
-log path `atx-agent.log`
 
 ## TODO
 - [ ] 使用支持多线程下载的库 https://github.com/cavaliercoder/grab
