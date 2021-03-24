@@ -26,7 +26,21 @@ func getDeviceInfo() *DeviceInfo {
 		Brand:        getCachedProperty("ro.product.brand"),
 		Model:        getCachedProperty("ro.product.model"),
 		Version:      getCachedProperty("ro.build.version.release"),
+		Arch:         getCachedProperty("ro.product.cpu.abi"),
 		AgentVersion: version,
+
+		Product: &Product{
+			Name:   getCachedProperty("ro.product.name"),
+			Brand:  getCachedProperty("ro.product.brand"),
+			Model:  getCachedProperty("ro.product.model"),
+			Memory: getCachedProperty("ro.product.name"),
+			Cpu:    getCachedProperty("ro.product.cpu.abi"),
+		},
+
+		Provider: &Provider{
+			IP:   mustGetOoutboundIP().String(),
+			Port: listenPort,
+		},
 	}
 	devInfo.Sdk, _ = strconv.Atoi(getCachedProperty("ro.build.version.sdk"))
 	devInfo.HWAddr, _ = androidutils.HWAddrWLAN()
@@ -75,6 +89,7 @@ func getDeviceInfo() *DeviceInfo {
 		strings.Replace(getCachedProperty("ro.product.model"), " ", "_", -1),
 		devInfo.AndroidId)
 	devInfo.Udid = fmt.Sprintf("%x", md5.Sum([]byte(udid)))
+	devInfo.Provider.Remote = fmt.Sprintf("%s.tk.ipviewer.cn", devInfo.Udid)
 	currentDeviceInfo = devInfo
 	return currentDeviceInfo
 }

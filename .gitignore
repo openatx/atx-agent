@@ -24,3 +24,4 @@ go.sum
 atx-agent*
 filebrower.db
 latest
+bin
