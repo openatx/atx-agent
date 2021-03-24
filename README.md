@@ -468,7 +468,7 @@ Websocket连接 `$DEVICE_URL/minitouch`, 一行行的按照JSON的格式写入
 3. 内置的网页adb shell的安全问题
 
 # Logs
-log path `/sdcard/atx-agent.log`
+log path `atx-agent.log`
 
 ## TODO
 - [ ] 使用支持多线程下载的库 https://github.com/cavaliercoder/grab

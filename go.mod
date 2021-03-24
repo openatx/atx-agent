@@ -6,6 +6,7 @@ require (
 	github.com/alecthomas/kingpin v2.2.6+incompatible
 	github.com/asdine/storm v2.1.2+incompatible
 	github.com/codeskyblue/goreq v0.0.0-20180831024223-49450746aaef
+	github.com/creack/pty v1.1.11
 	github.com/dustin/go-broadcast v0.0.0-20171205050544-f664265f5a66
 	github.com/fatedier/frp v0.33.0
 	github.com/fatedier/golib v0.0.0-20181107124048-ff8cd814b049
@@ -26,7 +27,6 @@ require (
 	github.com/kardianos/osext v0.0.0-20170510131534-ae77be60afb1 // indirect
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/kr/binarydist v0.1.0 // indirect
-	github.com/kr/pty v1.1.8
 	github.com/levigross/grequests v0.0.0-20190130132859-37c80f76a0da
 	github.com/mitchellh/ioprogress v0.0.0-20180201004757-6a23b12fa88e
 	github.com/openatx/androidutils v1.0.0
@@ -38,6 +38,8 @@ require (
 	github.com/rs/cors v1.6.0
 	github.com/sevlyar/go-daemon v0.1.4
 	github.com/shogo82148/androidbinary v1.0.1
+	github.com/shurcooL/httpfs v0.0.0-20190707220628-8d4bc4ba7749 // indirect
+	github.com/shurcooL/vfsgen v0.0.0-20200824052919-0d455de96546 // indirect
 	github.com/sirupsen/logrus v1.4.2
 	github.com/stretchr/testify v1.4.0
 )

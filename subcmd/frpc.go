@@ -32,17 +32,31 @@ var (
 	floglevel  string
 	flogfile   string
 	flogmaxday int64
+
+	fproxytype string //support http tcp stcp
+
 	fproxyname string
 	flocalip   string
 	flocalport int
 
-	fcustom string
-	fsubdom string
-
+	// (http,https)
+	fcustom    string
+	fsubdom    string
 	flocations string
 	fhttpuser  string
 	fhttppass  string
 
+	// tcp only
+	fremoteport int
+
+	// stcp only
+	frole       string
+	fsk         string
+	fservername string
+	fbindaddr   string
+	fbindport   int
+
+	//all
 	fencryption  bool
 	fcompression bool
 	fdaemon      bool
@@ -66,17 +80,32 @@ func RegisterFrpc(frpc *kingpin.CmdClause) {
 	frpc.Flag("log_file", "log file").Default("console").StringVar(&flogfile)
 	frpc.Flag("log_max_days", "log file reversed days").Default("3").Int64Var(&flogmaxday)
 
+	// flag type
+	frpc.Flag("proxy_type", "proxy type").Short('k').Default("http").StringVar(&fproxytype)
+
+	// flag,use for (http,tcp)
 	frpc.Flag("proxy_name", "proxy name").Short('n').Default("").StringVar(&fproxyname)
 	frpc.Flag("local_ip", "local ip").Short('i').Default("127.0.0.1").StringVar(&flocalip)
 	frpc.Flag("local_port", "local port").Short('l').Required().IntVar(&flocalport)
 
+	// flag use for (tcp only)
+	frpc.Flag("remote_port", "remote port").Short('r').Default("0").IntVar(&fremoteport)
+
+	// flag use for (stcp only)
+	frpc.Flag("role", "role").Default("server").StringVar(&frole)
+	frpc.Flag("sk", "sk").Default("").StringVar(&fsk)
+	frpc.Flag("server_name", "server name").StringVar(&fservername)
+	frpc.Flag("bind_addr", "bind addr").Default("0.0.0.0").StringVar(&fbindaddr)
+	frpc.Flag("bind_port", "bind port").Default("0").IntVar(&fbindport)
+
+	// flag use for (http,https)
 	frpc.Flag("custom_domain", "custom domain").Short('c').Default("").StringVar(&fcustom)
 	frpc.Flag("sd", "sub domain").Default("").StringVar(&fsubdom)
 	frpc.Flag("locations", "locations").Default("").StringVar(&flocations)
-
 	frpc.Flag("http_user", "http auth user").StringVar(&fhttpuser)
 	frpc.Flag("http_pass", "http auth pass").StringVar(&fhttppass)
 
+	// flag, use for (http,tcp,stcp)
 	frpc.Flag("ue", "use encryption").BoolVar(&fencryption)
 	frpc.Flag("uc", "use compression").BoolVar(&fcompression)
 
@@ -205,35 +234,118 @@ func DoFrpc() error {
 		fmt.Println(err)
 		return err
 	}
-	cfg := &config.HttpProxyConf{}
+
 	var prefix string
 	if fuser != "" {
 		prefix = fuser + "."
 	}
 
-	cfg.ProxyName = prefix + fproxyname
-	cfg.ProxyType = consts.HttpProxy
-	cfg.LocalIp = flocalip
-	cfg.LocalPort = flocalport
-	cfg.CustomDomains = strings.Split(fcustom, ",")
-	cfg.SubDomain = fsubdom
-	cfg.Locations = strings.Split(flocations, ",")
-	cfg.HttpUser = fhttpuser
-	cfg.HttpPwd = fhttppass
-	cfg.UseEncryption = fencryption
-	cfg.UseCompression = fcompression
-	err = cfg.CheckForCli()
+	proxyConfs := map[string]config.ProxyConf{}
+	visitorConfs := map[string]config.VisitorConf{}
 
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
-		return err
-	}
-	proxyConfs := map[string]config.ProxyConf{
-		cfg.ProxyName: cfg,
+	baseconf := config.BaseProxyConf{
+		ProxyName:      prefix + fproxyname,
+		UseEncryption:  fencryption,
+		UseCompression: fcompression,
+		LocalSvrConf: config.LocalSvrConf{
+			LocalIp:   flocalip,
+			LocalPort: flocalport,
+		},
 	}
 
-	err = startService(clientCfg, proxyConfs, nil, "")
+	switch fproxytype {
+	case "http":
+		baseconf.ProxyType = consts.HttpProxy
+		cfg := &config.HttpProxyConf{
+			BaseProxyConf: baseconf,
+		}
+		cfg.CustomDomains = strings.Split(fcustom, ",")
+		cfg.SubDomain = fsubdom
+		cfg.Locations = strings.Split(flocations, ",")
+		cfg.HttpUser = fhttpuser
+		cfg.HttpPwd = fhttppass
+		if err := cfg.CheckForCli(); err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+			return err
+		}
+		proxyConfs[cfg.ProxyName] = cfg
+	case "https":
+	case "tcp":
+		baseconf.ProxyType = consts.TcpProxy
+		cfg := &config.TcpProxyConf{
+			BaseProxyConf: baseconf,
+		}
+		cfg.RemotePort = fremoteport
+		if err := cfg.CheckForCli(); err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+			return err
+		}
+		proxyConfs[cfg.ProxyName] = cfg
+	case "stcp":
+		switch frole {
+		case "server":
+			baseconf.ProxyType = consts.StcpProxy
+			cfg := &config.StcpProxyConf{
+				BaseProxyConf: baseconf,
+			}
+			cfg.Role = "server"
+			cfg.Sk = fsk
+			if err := cfg.CheckForCli(); err != nil {
+				fmt.Println(err)
+				os.Exit(1)
+				return err
+			}
+			proxyConfs[cfg.ProxyName] = cfg
+		case "visitor":
+			cfg := &config.StcpVisitorConf{
+				BaseVisitorConf: config.BaseVisitorConf{
+					ProxyName:      baseconf.ProxyName,
+					ProxyType:      consts.StcpProxy,
+					UseEncryption:  baseconf.UseEncryption,
+					UseCompression: baseconf.UseCompression,
+				},
+			}
+			cfg.Role = "visitor"
+			cfg.Sk = fsk
+			cfg.ServerName = fservername
+			cfg.BindAddr = fbindaddr
+			cfg.BindPort = fbindport
+			if err := cfg.Check(); err != nil {
+				fmt.Println(err)
+				os.Exit(1)
+				return err
+			}
+			visitorConfs[cfg.ProxyName] = cfg
+		}
+
+	default:
+	}
+
+	// cfg := &config.HttpProxyConf{}
+	// cfg.ProxyName = prefix + fproxyname
+	// cfg.ProxyType = consts.HttpProxy
+	// cfg.LocalIp = flocalip
+	// cfg.LocalPort = flocalport
+	// cfg.CustomDomains = strings.Split(fcustom, ",")
+	// cfg.SubDomain = fsubdom
+	// cfg.Locations = strings.Split(flocations, ",")
+	// cfg.HttpUser = fhttpuser
+	// cfg.HttpPwd = fhttppass
+	// cfg.UseEncryption = fencryption
+	// cfg.UseCompression = fcompression
+	// err = cfg.CheckForCli()
+	// if err != nil {
+	// 	fmt.Println(err)
+	// 	os.Exit(1)
+	// 	return err
+	// }
+	// proxyConfs := map[string]config.ProxyConf{
+	// 	cfg.ProxyName: cfg,
+	// }
+
+	err = startService(clientCfg, proxyConfs, visitorConfs, "")
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)

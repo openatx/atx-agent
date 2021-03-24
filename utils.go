@@ -614,7 +614,7 @@ func readCPUInfo(pid int) (info CPUInfo, err error) {
 }
 
 func dumpHierarchy() (xmlContent string, err error) {
-	const targetPath = "/sdcard/window_dump.xml"
+	var targetPath = filepath.Join(expath, "window_dump.xml")
 	c := &Command{
 		Args:  []string{"uiautomator", "dump", targetPath},
 		Shell: true,

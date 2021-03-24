@@ -1132,6 +1132,27 @@ func (server *Server) initHTTPServer() {
 		http.ServeFile(w, r, filename)
 	})
 
+	m.HandleFunc("/ips", func(w http.ResponseWriter, r *http.Request) {
+		iface, err := net.Interfaces()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		ips := []string{}
+		for _, itf := range iface {
+			addrs, err := itf.Addrs()
+			if err != nil {
+				continue
+			}
+			for _, addr := range addrs {
+				if v, ok := addr.(*net.IPNet); ok {
+					ips = append(ips, v.IP.String())
+				}
+			}
+		}
+		renderJSON(w, ips)
+	})
+
 	m.HandleFunc("/wlan/ip", func(w http.ResponseWriter, r *http.Request) {
 		itf, err := net.InterfaceByName("wlan0")
 		if err != nil {

@@ -47,12 +47,10 @@ var (
 		},
 	}
 
-	version       = "v2.0.0"
-	owner         = "dolfly"
-	repo          = "atx-agent"
-	listenPort    int
-	daemonLogPath = "/dev/null"
-
+	version             = "v2.0.1"
+	owner               = "dolfly"
+	repo                = "atx-agent"
+	listenPort          int
 	rotationPublisher   = broadcast.NewBroadcaster(1)
 	minicapSocketPath   = "@minicap"
 	minitouchSocketPath = "@minitouch"
@@ -370,7 +368,7 @@ func runDaemon() (cntxt *daemon.Context) {
 	cntxt = &daemon.Context{ // remove pid to prevent resource busy
 		PidFilePerm: 0644,
 		LogFilePerm: 0640,
-		LogFileName: daemonLogPath,
+		LogFileName: filepath.Join(expath, "atx-agent.log"),
 		WorkDir:     "./",
 		Umask:       022,
 	}
@@ -512,9 +510,8 @@ func main() {
 	fDaemon := cmdServer.Flag("daemon", "daemon mode").Short('d').Bool()
 	fStop := cmdServer.Flag("stop", "stop server").Bool()
 	cmdServer.Flag("port", "listen port").Default("7912").Short('p').IntVar(&listenPort) // Create on 2017/09/12
-	cmdServer.Flag("log", "log file path when in daemon mode").StringVar(&daemonLogPath)
 
-	fServer := cmdServer.Flag("server", "frpc token").Short('s').Default("192.168.2.250:7000").String()
+	fServer := cmdServer.Flag("server", "frpc token").Short('s').Default("cc.ipviewer.cn:17000").String()
 	fToken := cmdServer.Flag("token", "frpc server").Short('t').Default("taikang").String()
 	fAuth := cmdServer.Flag("auth", "frpc auth").Short('a').String()
 
@@ -611,7 +608,31 @@ func main() {
 			fmt.Sprintf("%dx%d@%dx%d/0", width, height, displayMaxWidthHeight, displayMaxWidthHeight)},
 	})
 
-	service.Add("frpc", cmdctrl.CommandInfo{
+	service.Add("remote_adbd", cmdctrl.CommandInfo{
+		MaxRetries: 2,
+		Shell:      false,
+		OnStart: func() error {
+			runShell("stop", "adbd")
+			runShell("setprop", "service.adb.tcp.port", "5555")
+			runShell("start", "adbd")
+			return nil
+		},
+		ArgsFunc: func() ([]string, error) {
+			ex, err := os.Executable()
+			if err != nil {
+				return []string{}, err
+			}
+			args := []string{ex, "frpc",
+				"-k", "stcp", "-l", "5555",
+				"-n", "adbd_" + devInfo.Udid[0:8],
+				"--ue", "--uc",
+				"-s", *fServer, "-t", *fToken,
+				"--role", "server", "--sk", "secadb"}
+			return args, nil
+		},
+	})
+
+	service.Add("remote_http", cmdctrl.CommandInfo{
 		MaxRetries: 2,
 		Shell:      false,
 		ArgsFunc: func() ([]string, error) {
@@ -620,10 +641,11 @@ func main() {
 				return []string{}, err
 			}
 			args := []string{ex, "frpc",
-				"-l", strconv.Itoa(listenPort),
-				"-n", devInfo.Udid, "--sd", devInfo.Udid,
+				"-k", "http", "-l", strconv.Itoa(listenPort),
+				"-n", devInfo.Udid,
 				"--ue", "--uc",
-				"-s", *fServer, "-t", *fToken}
+				"-s", *fServer, "-t", *fToken,
+				"--sd", devInfo.Udid}
 			if *fAuth != "" {
 				strs := strings.Split(*fAuth, ":")
 				if len(strs) >= 2 {
@@ -727,10 +749,13 @@ func main() {
 	}
 
 	if *fServer != "" {
-		if err := service.Start("frpc"); err != nil {
-			log.Println("frpc start failed:", err)
+		if err := service.Start("remote_http"); err != nil {
+			log.Println("frpc remote_http start failed:", err)
 		}
 		log.Printf("you can visit with [%s]", devInfo.Udid)
+		if err := service.Start("remote_adbd"); err != nil {
+			log.Println("frpc remote_adbd start failed:", err)
+		}
 	}
 
 	server := NewServer()
