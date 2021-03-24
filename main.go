@@ -47,7 +47,7 @@ var (
 		},
 	}
 
-	version             = "v2.0.1"
+	version             = "v2.0.3"
 	owner               = "dolfly"
 	repo                = "atx-agent"
 	listenPort          int
@@ -536,7 +536,7 @@ func main() {
 		subcmd.DoFrpc()
 		return
 	case "version":
-		println(version)
+		fmt.Println(version)
 		return
 	case "install":
 		am := &APKManager{Path: *apkPath}
@@ -549,7 +549,7 @@ func main() {
 		return
 	case "info":
 		data, _ := json.MarshalIndent(getDeviceInfo(), "", "  ")
-		println(string(data))
+		fmt.Println(string(data))
 		return
 	case "server":
 		// continue

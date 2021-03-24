@@ -1055,6 +1055,7 @@ func (server *Server) initHTTPServer() {
 		io.WriteString(w, "update finished, restarting")
 		go func() {
 			log.Printf("restarting server")
+			runDaemon()
 			// TODO(ssx): runDaemon()
 		}()
 	})
