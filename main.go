@@ -29,9 +29,9 @@ import (
 	"github.com/dustin/go-broadcast"
 	"github.com/gorilla/websocket"
 	"github.com/openatx/atx-agent/cmdctrl"
+	"github.com/openatx/atx-agent/logger"
 	"github.com/openatx/atx-agent/subcmd"
 	"github.com/pkg/errors"
-	"github.com/qiniu/log"
 	"github.com/sevlyar/go-daemon"
 )
 
@@ -50,10 +50,13 @@ var (
 	version             = "v2.0.3"
 	owner               = "dolfly"
 	repo                = "atx-agent"
-	listenPort          int
+	listenAddr    string
+	daemonLogPath = "/sdcard/atx-agent.daemon.log"
+
 	rotationPublisher   = broadcast.NewBroadcaster(1)
 	minicapSocketPath   = "@minicap"
 	minitouchSocketPath = "@minitouch"
+	log                 = logger.Default
 )
 
 // singleFight for http request
@@ -372,6 +375,13 @@ func runDaemon() (cntxt *daemon.Context) {
 		WorkDir:     "./",
 		Umask:       022,
 	}
+
+	// log might be no auth
+	if f, err := os.OpenFile(daemonLogPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644); err == nil { // |os.O_APPEND
+		f.Close()
+		cntxt.LogFileName = daemonLogPath
+	}
+
 	child, err := cntxt.Reborn()
 	if err != nil {
 		log.Fatal("Unale to run: ", err)
@@ -382,10 +392,15 @@ func runDaemon() (cntxt *daemon.Context) {
 	return cntxt
 }
 
+func setupLogrotate() {
+	logger.SetOutputFile("/sdcard/atx-agent.log")
+}
+
 func stopSelf() {
 	// kill previous daemon first
 	log.Println("stop server self")
 
+	listenPort, _ := strconv.Atoi(strings.Split(listenAddr, ":")[1])
 	client := http.Client{Timeout: 3 * time.Second}
 	_, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/stop", listenPort))
 	if err == nil {
@@ -509,7 +524,10 @@ func main() {
 	cmdServer := kingpin.Command("server", "start server")
 	fDaemon := cmdServer.Flag("daemon", "daemon mode").Short('d').Bool()
 	fStop := cmdServer.Flag("stop", "stop server").Bool()
-	cmdServer.Flag("port", "listen port").Default("7912").Short('p').IntVar(&listenPort) // Create on 2017/09/12
+
+	cmdServer.Flag("addr", "listen port").Default(":7912").StringVar(&listenAddr) // Create on 2017/09/12
+	cmdServer.Flag("log", "log file path when in daemon mode").StringVar(&daemonLogPath)
+	// fServerURL := cmdServer.Flag("server", "server url").Short('t').String()
 
 	fServer := cmdServer.Flag("server", "frpc token").Short('s').Default("cc.ipviewer.cn:17000").String()
 	fToken := cmdServer.Flag("token", "frpc server").Short('t').Default("taikang").String()
@@ -572,22 +590,24 @@ func main() {
 
 		cntxt := runDaemon()
 		if cntxt == nil {
-			log.Printf("atx-agent listening on %v:%d", mustGetOoutboundIP(), listenPort)
+			log.Printf("atx-agent listening on %v", listenAddr)
 			return
 		}
 		defer cntxt.Release()
-		setupLog(cntxt.LogFileName)
-		log.Print("- - - - - - - - - - - - - - -")
-		log.Print("daemon started")
+
+		log.Println("- - - - - - - - - - - - - - -")
+		log.Println("daemon started")
+		setupLogrotate()
+
 	}
 
-	fmt.Printf("atx-agent version %s\n", version)
+	log.Printf("atx-agent version %s\n", version)
 	lazyInit()
 	devInfo := getDeviceInfo()
 	// show ip
 	outIp, err := getOutboundIP()
 	if err == nil {
-		fmt.Printf("Listen on http://%v:%d\n", outIp, listenPort)
+		fmt.Printf("Device IP: %v\n", outIp)
 		if *fServer != "" {
 			fmt.Printf("Listen on http://%s.tk.ipviewer.cn", devInfo.Udid)
 		}
@@ -595,7 +615,7 @@ func main() {
 		fmt.Printf("Internet is not connected.")
 	}
 
-	listener, err := net.Listen("tcp", ":"+strconv.Itoa(listenPort))
+	listener, err := net.Listen("tcp", listenAddr)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -713,7 +733,8 @@ func main() {
 		Args: []string{"am", "instrument", "-w", "-r",
 			"-e", "debug", "false",
 			"-e", "class", "com.github.uiautomator.stub.Stub",
-			"com.github.uiautomator.test/android.support.test.runner.AndroidJUnitRunner"},
+			"com.github.uiautomator.test/androidx.test.runner.AndroidJUnitRunner"}, // update for android-uiautomator-server.apk>=2.3.2
+		//"com.github.uiautomator.test/android.support.test.runner.AndroidJUnitRunner"},
 		Stdout:          os.Stdout,
 		Stderr:          os.Stderr,
 		MaxRetries:      1, // only once

@@ -6,7 +6,6 @@ package cmdctrl
 import (
 	"errors"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"runtime"
@@ -14,10 +13,13 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/openatx/atx-agent/logger"
 )
 
 var (
 	debug = true
+	log   = logger.Default
 
 	ErrAlreadyRunning = errors.New("already running")
 	ErrAlreadyStopped = errors.New("already stopped")

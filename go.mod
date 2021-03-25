@@ -1,6 +1,7 @@
 module github.com/openatx/atx-agent
 
 require (
+	github.com/BurntSushi/toml v0.3.1 // indirect
 	github.com/DeanThompson/syncmap v0.0.0-20170515023643-05cfe1984971
 	github.com/GeertJohan/go.rice v1.0.0
 	github.com/alecthomas/kingpin v2.2.6+incompatible
@@ -40,8 +41,12 @@ require (
 	github.com/shogo82148/androidbinary v1.0.1
 	github.com/shurcooL/httpfs v0.0.0-20190707220628-8d4bc4ba7749 // indirect
 	github.com/shurcooL/vfsgen v0.0.0-20200824052919-0d455de96546 // indirect
-	github.com/sirupsen/logrus v1.4.2
+	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/testify v1.6.1
+	github.com/ulikunitz/xz v0.5.5 // indirect
+	golang.org/x/net v0.0.0-20181114220301-adae6a3d119a // indirect
+	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
+	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
 
 replace (

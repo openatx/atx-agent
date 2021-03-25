@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/qiniu/log"
 	"github.com/shogo82148/androidbinary/apk"
 )
 

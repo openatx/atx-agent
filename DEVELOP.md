@@ -1,6 +1,7 @@
 # Develop doc
 需要Go版本 >= 1.11, 这个版本之后可以不用设置GOPATH变量了。
 
+
 ## 安装Go环境
 Mac上安装Go
 
@@ -9,6 +10,8 @@ brew install go
 ```
 
 ## 编译方法
+编译参考: https://github.com/golang/go/wiki/GoArm
+
 ```bash
 # 下载代码
 git clone https://github.com/openatx/atx-agent
