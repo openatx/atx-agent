@@ -13,10 +13,12 @@
     <div style="margin: 5px 0px">
       <img ref="display" style="border: 1px solid blue;" />
     </div>
-      <!-- <span style="background-color:blueviolet; color:whilte" v-show="readonly">ReadOnly</span>
+    <div style="display:none">
+      <span style="background-color:blueviolet; color:whilte" v-show="readonly">ReadOnly</span>
       <button @click="refreshImg">刷新画面 fps: <span v-text="fps.toFixed(1)"></span></button>
       <button @click="keyevent('HOME')">HOME</button>
-      <input v-model="command" placeholder="shell command" v-on:keyup.enter="runCommand"> -->
+      <input v-model="command" placeholder="shell command" v-on:keyup.enter="runCommand">
+    </div>
   </div>
   <script src="http://cdn.jsdelivr.net/g/vue@2.1.10,jquery@3.1.1"></script>
   <script>
@@ -116,7 +118,6 @@
         const img = this.img = this.$refs.display
         img.style.maxWidth = "800px"
         img.style.maxHeight = window.innerHeight - img.getBoundingClientRect().top + "px"
-
         // img.src = `http://${location.host}/screenshot`
         // img.onload = () => {
         //   this.notify("image loaded")
@@ -210,7 +211,6 @@
           ws.onmessage = (message) => {
             console.log("minitouch recv", message)
           }
-
           ws.onclose = () => {
             this.readonly = true
             console.log("minitouch closed")
@@ -223,7 +223,6 @@
         },
         syncDisplay(canvas) {
           let ws = new WebSocket('ws://' + location.host + "/minicap")
-          
           ws.onclose = () => {
             var warn = document.createElement("div")
             warn.innerText = "Websocket closed, Refresh to reload."

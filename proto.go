@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/openatx/androidutils"
@@ -83,8 +82,7 @@ type Product struct {
 // u2init
 type Provider struct {
 	Id                string    `json:"id" gorethink:"id,omitempty"` // machine id
-	IP                string    `json:"ip" gorethink:"ip,omitempty"`
-	Port              int       `json:"port" gorethink:"port,omitempty"`
+	Local             string    `json:"local",omitempty`
 	Remote            string    `json:"remote",omitempty`
 	Present           *bool     `json:"present,omitempty"`
 	Notes             string    `json:"notes" gorethink:"notes,omitempty"`
@@ -92,7 +90,10 @@ type Provider struct {
 	PresenceChangedAt time.Time `json:"presenceChangedAt,omitempty"`
 }
 
-// Addr combined with ip:port
 func (p *Provider) Addr() string {
-	return fmt.Sprintf("%s:%d", p.IP, p.Port)
+	return p.Local
+}
+
+func (p *Provider) RemoteAddr() string {
+	return p.Remote
 }

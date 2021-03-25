@@ -1053,7 +1053,12 @@ func (server *Server) initHTTPServer() {
 		io.WriteString(w, "update finished, restarting")
 		go func() {
 			log.Printf("restarting server")
-			runDaemon()
+			ex, err := os.Executable()
+			if err != nil {
+				fmt.Printf("get exec error %s\n", err)
+				return
+			}
+			runShell(ex, "server", "-d", "--stop")
 			// TODO(ssx): runDaemon()
 		}()
 	})

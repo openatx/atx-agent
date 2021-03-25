@@ -47,11 +47,11 @@ var (
 		},
 	}
 
-	version             = "v2.0.3"
-	owner               = "dolfly"
-	repo                = "atx-agent"
+	version       = "v2.0.7"
+	owner         = "dolfly"
+	repo          = "atx-agent"
 	listenAddr    string
-	daemonLogPath = "/sdcard/atx-agent.daemon.log"
+	daemonLogPath = filepath.Join(expath, "atx-agent.daemon.log")
 
 	rotationPublisher   = broadcast.NewBroadcaster(1)
 	minicapSocketPath   = "@minicap"
@@ -525,7 +525,7 @@ func main() {
 	fDaemon := cmdServer.Flag("daemon", "daemon mode").Short('d').Bool()
 	fStop := cmdServer.Flag("stop", "stop server").Bool()
 
-	cmdServer.Flag("addr", "listen port").Default(":7912").StringVar(&listenAddr) // Create on 2017/09/12
+	cmdServer.Flag("addr", "listen addr").Default(":7912").StringVar(&listenAddr) // Create on 2017/09/12
 	cmdServer.Flag("log", "log file path when in daemon mode").StringVar(&daemonLogPath)
 	// fServerURL := cmdServer.Flag("server", "server url").Short('t').String()
 
@@ -660,8 +660,16 @@ func main() {
 			if err != nil {
 				return []string{}, err
 			}
+			host := "127.0.0.1"
+			port := "7912"
+			arr := strings.Split(listenAddr, ":")
+			if len(arr) == 2 {
+				host = arr[0]
+				port = arr[1]
+			}
+			_ = host
 			args := []string{ex, "frpc",
-				"-k", "http", "-l", strconv.Itoa(listenPort),
+				"-k", "http", "-l", port,
 				"-n", devInfo.Udid,
 				"--ue", "--uc",
 				"-s", *fServer, "-t", *fToken,

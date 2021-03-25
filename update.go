@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -64,11 +63,7 @@ func doUpdate(version string) (err error) {
 			return err
 		}
 	}
-	arch := runtime.GOARCH
-	if runtime.GOOS == "linux" && arch == "arm" {
-		arch += "v7"
-	}
-	filename := fmt.Sprintf("%s_%s_%s_%s", repo, version, runtime.GOOS, arch)
+	filename := fmt.Sprintf("%s_%s_%s_%s", repo, version, runtime.GOOS, runtime.GOARCH)
 	log.Printf("update file: %s", filename)
 
 	// fixed get latest version

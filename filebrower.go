@@ -12,7 +12,6 @@ import (
 	"github.com/filebrowser/filebrowser/v2/storage"
 	"github.com/filebrowser/filebrowser/v2/storage/bolt"
 	"github.com/filebrowser/filebrowser/v2/users"
-	"github.com/qiniu/log"
 )
 
 var databases = map[string]*storm.DB{}

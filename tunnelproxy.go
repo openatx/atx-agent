@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"crypto/md5"
 	"fmt"
 	"math"
@@ -34,8 +33,7 @@ func getDeviceInfo() *DeviceInfo {
 		},
 
 		Provider: &Provider{
-			IP:   mustGetOoutboundIP().String(),
-			Port: listenPort,
+			Local: listenAddr,
 		},
 	}
 	devInfo.Sdk, _ = strconv.Atoi(getCachedProperty("ro.build.version.sdk"))

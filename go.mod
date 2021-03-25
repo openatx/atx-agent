@@ -1,7 +1,6 @@
 module github.com/openatx/atx-agent
 
 require (
-	github.com/BurntSushi/toml v0.3.1 // indirect
 	github.com/DeanThompson/syncmap v0.0.0-20170515023643-05cfe1984971
 	github.com/GeertJohan/go.rice v1.0.0
 	github.com/alecthomas/kingpin v2.2.6+incompatible
@@ -22,7 +21,6 @@ require (
 	github.com/getlantern/hidden v0.0.0-20160523043807-d52a649ab33a // indirect
 	github.com/getlantern/ops v0.0.0-20170904182230-37353306c908 // indirect
 	github.com/google/go-querystring v1.0.0 // indirect
-	github.com/gorilla/handlers v1.4.2
 	github.com/gorilla/mux v1.7.4
 	github.com/gorilla/websocket v1.4.1
 	github.com/kardianos/osext v0.0.0-20170510131534-ae77be60afb1 // indirect
@@ -35,7 +33,6 @@ require (
 	github.com/pierrec/lz4 v2.0.5+incompatible // indirect
 	github.com/pkg/errors v0.8.1
 	github.com/prometheus/procfs v0.0.8
-	github.com/qiniu/log v0.0.0-20140728010919-a304a74568d6
 	github.com/rs/cors v1.6.0
 	github.com/sevlyar/go-daemon v0.1.4
 	github.com/shogo82148/androidbinary v1.0.1
@@ -43,9 +40,6 @@ require (
 	github.com/shurcooL/vfsgen v0.0.0-20200824052919-0d455de96546 // indirect
 	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/testify v1.6.1
-	github.com/ulikunitz/xz v0.5.5 // indirect
-	golang.org/x/net v0.0.0-20181114220301-adae6a3d119a // indirect
-	gopkg.in/check.v1 v1.0.0-20190902080502-41f04d3bba15 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
 
