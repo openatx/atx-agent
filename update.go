@@ -1,13 +1,11 @@
 package main
 
 import (
-	"bufio"
 	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -17,9 +15,12 @@ import (
 
 	"github.com/codeskyblue/goreq"
 	"github.com/getlantern/go-update"
-	"github.com/mholt/archiver"
 	"github.com/mitchellh/ioprogress"
 )
+
+var baseurl string = "https://safe-sig.bj.bcebos.com/opinit/atx-agent"
+
+//var baseurl string = "http://192.168.2.250/atx-agent"
 
 func formatString(format string, params map[string]string) string {
 	for k, v := range params {
@@ -30,7 +31,7 @@ func formatString(format string, params map[string]string) string {
 
 func makeTempDir() string {
 	if runtime.GOOS == "linux" && runtime.GOARCH == "arm" {
-		target := "/data/local/tmp/atx-update.tmp"
+		target := filepath.Join(expath, "atx-update.tmp")
 		os.MkdirAll(target, 0755)
 		return target
 	}
@@ -40,8 +41,8 @@ func makeTempDir() string {
 
 func getLatestVersion() (version string, err error) {
 	res, err := goreq.Request{
-		Uri: fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", owner, repo),
-	}.WithHeader("Authorization", "token e83785ff4e37c67098efcea923b668f4135d1dda").Do() // this GITHUB_TOKEN is only for get lastest version
+		Uri: baseurl + "/latest",
+	}.Do()
 	if err != nil {
 		return
 	}
@@ -49,44 +50,11 @@ func getLatestVersion() (version string, err error) {
 	if res.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("http status code is not 200, got %d", res.StatusCode)
 	}
-	var t = struct {
-		TagName string `json:"tag_name"`
-	}{}
-	if err = json.NewDecoder(res.Body).Decode(&t); err != nil {
+	ver, err := ioutil.ReadAll(res.Body)
+	if err != nil {
 		return
 	}
-	if t.TagName == "" {
-		return "", errors.New("TagName empty")
-	}
-	return t.TagName, nil
-}
-
-func getChecksums(version string) (map[string]string, error) {
-	uri := formatString("https://github.com/{owner}/{repo}/releases/download/{version}/{repo}_{version}_checksums.txt", map[string]string{
-		"version": version,
-		"owner":   owner,
-		"repo":    repo,
-	})
-	res, err := goreq.Request{
-		Uri:             uri,
-		MaxRedirects:    10,
-		RedirectHeaders: true,
-	}.Do()
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-	scanner := bufio.NewScanner(res.Body)
-	m := make(map[string]string, 6)
-	for scanner.Scan() {
-		var filename, sha256sum string
-		_, err := fmt.Sscanf(scanner.Text(), "%s\t%s", &sha256sum, &filename)
-		if err != nil {
-			continue
-		}
-		m[filename] = sha256sum
-	}
-	return m, nil
+	return strings.Trim(string(ver), "\n"), nil
 }
 
 func doUpdate(version string) (err error) {
@@ -100,21 +68,12 @@ func doUpdate(version string) (err error) {
 	if runtime.GOOS == "linux" && arch == "arm" {
 		arch += "v7"
 	}
-	filename := fmt.Sprintf("%s_%s_%s_%s.tar.gz", repo, version, runtime.GOOS, arch)
+	filename := fmt.Sprintf("%s_%s_%s_%s", repo, version, runtime.GOOS, arch)
 	log.Printf("update file: %s", filename)
-	checksums, err := getChecksums(version)
-	if err != nil {
-		return err
-	}
-	checksum, ok := checksums[filename]
-	if !ok {
-		return fmt.Errorf("checksums not found for file: %s", filename)
-	}
+
 	// fixed get latest version
-	uri := formatString("https://github.com/{owner}/{repo}/releases/download/{version}/{filename}", map[string]string{
-		"version":  version,
-		"owner":    owner,
-		"repo":     repo,
+	uri := formatString("{baseurl}/{filename}", map[string]string{
+		"baseurl":  baseurl,
 		"filename": filename,
 	})
 	log.Printf("update url: %s", uri)
@@ -142,7 +101,7 @@ func doUpdate(version string) (err error) {
 		DrawFunc: ioprogress.DrawTerminalf(os.Stdout, ioprogress.DrawTextFormatBytes),
 	}
 	tmpdir := makeTempDir()
-	distPath := filepath.Join(tmpdir, "dist.tar.gz")
+	distPath := filepath.Join(tmpdir, repo)
 	f, err := os.Create(distPath)
 	if err != nil {
 		return err
@@ -150,13 +109,6 @@ func doUpdate(version string) (err error) {
 	writer := io.MultiWriter(f, hasher)
 	io.Copy(writer, progressR)
 	if err = f.Close(); err != nil {
-		return err
-	}
-	realChecksum := hex.EncodeToString(hasher.Sum(nil))
-	if realChecksum != checksum {
-		return fmt.Errorf("update file checksum wrong, expected: %s, got: %s", checksum, realChecksum)
-	}
-	if err = archiver.TarGz.Open(distPath, tmpdir); err != nil {
 		return err
 	}
 	log.Println("perform updating")

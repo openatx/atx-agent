@@ -1,32 +1,27 @@
+
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
   <title>Remote control</title>
 </head>
-
 <body>
   <div id="app">
-    <h3>极简手机远程控制 <small style="color: gray" v-text="message"></small></h3>
+    <!-- <h3>极简手机远程控制 <small style="color: gray" v-text="message"></small></h3> -->
     <div style="margin: 5px 0px">
-      <span style="background-color:blueviolet; color:whilte" v-show="readonly">ReadOnly</span>
-      <button @click="refreshImg">刷新画面 fps: <span v-text="fps.toFixed(1)"></span></button>
-      <button @click="keyevent('HOME')">HOME</button>
-      <input v-model="command" placeholder="shell command" v-on:keyup.enter="runCommand">
-    </div>
-    <div>
       <img ref="display" style="border: 1px solid blue;" />
     </div>
+      <!-- <span style="background-color:blueviolet; color:whilte" v-show="readonly">ReadOnly</span>
+      <button @click="refreshImg">刷新画面 fps: <span v-text="fps.toFixed(1)"></span></button>
+      <button @click="keyevent('HOME')">HOME</button>
+      <input v-model="command" placeholder="shell command" v-on:keyup.enter="runCommand"> -->
   </div>
-
-  <script src="//cdn.jsdelivr.net/g/vue@2.1.10,jquery@3.1.1"></script>
+  <script src="http://cdn.jsdelivr.net/g/vue@2.1.10,jquery@3.1.1"></script>
   <script>
     const BLANK_IMG =
       'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='
-
     /**
       * Rotation affects the screen as follows:
       *
@@ -221,6 +216,9 @@
             console.log("minitouch closed")
             element.removeEventListener("mousedown", mouseDownListener)
             this.notify("minitouch closed")
+            console.log("reconneted");
+            this.syncTouchpad()
+            this.notify("minitouch refreshed")
           }
         },
         syncDisplay(canvas) {

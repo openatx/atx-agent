@@ -20,9 +20,3 @@ func TestGetLatestVersion(t *testing.T) {
 	t.Logf("version: %s", version)
 	assert.NotEqual(t, version, "")
 }
-
-func TestGetChecksums(t *testing.T) {
-	maps, err := getChecksums("0.0.1")
-	assert.NoError(t, err)
-	t.Logf("%#v", maps)
-}

@@ -2,9 +2,17 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
+
+	"github.com/openatx/androidutils"
+)
+
+const (
+	apkVersionCode = 4
+	apkVersionName = "1.0.4"
 )
 
 func installRequirements() error {
@@ -22,39 +30,45 @@ func installUiautomatorAPK() error {
 	if checkUiautomatorInstalled() {
 		return nil
 	}
-	baseURL := "https://github.com/openatx/android-uiautomator-server/releases/download/" + apkVersionName
-	if _, err := httpDownload("/data/local/tmp/app-debug.apk", baseURL+"/app-uiautomator.apk", 0644); err != nil {
+	baseURL := filepath.Join(baseurl, "uiautomator", apkVersionName)
+	appdebug := filepath.Join(expath, "app-debug.apk")
+	appdebugtest := filepath.Join(expath, "app-debug-test.apk")
+	filepath.Join(expath, "app-debug.apk")
+	if _, err := httpDownload(appdebug, baseURL+"/app-uiautomator.apk", 0644); err != nil {
 		return err
 	}
-	if _, err := httpDownload("/data/local/tmp/app-debug-test.apk", baseURL+"/app-uiautomator-test.apk", 0644); err != nil {
+	if _, err := httpDownload(appdebugtest, baseURL+"/app-uiautomator-test.apk", 0644); err != nil {
 		return err
 	}
-	if err := forceInstallAPK("/data/local/tmp/app-debug.apk"); err != nil {
+	if err := forceInstallAPK(appdebug); err != nil {
 		return err
 	}
-	if err := forceInstallAPK("/data/local/tmp/app-debug-test.apk"); err != nil {
+	if err := forceInstallAPK(appdebugtest); err != nil {
 		return err
 	}
 	return nil
 }
 
 func installMinicap() error {
+	minicapbin := filepath.Join(expath, "mincap")
+	minicapso := filepath.Join(expath, "minicap.so")
 	if runtime.GOOS == "windows" {
 		return nil
 	}
 	log.Println("install minicap")
-	// if fileExists("/data/local/tmp/minicap") && fileExists("/data/local/tmp/minicap.so") {
-	// 	if err := Screenshot("/dev/null"); err != nil {
-	// 		log.Println("err:", err)
-	// 	} else {
-	// 		return nil
-	// 	}
-	// }
-	// remove first to prevent "text file busy"
-	os.Remove("/data/local/tmp/minicap")
-	os.Remove("/data/local/tmp/minicap.so")
 
-	minicapSource := "https://github.com/codeskyblue/stf-binaries/raw/master/node_modules/minicap-prebuilt/prebuilt"
+	if fileExists(minicapbin) && fileExists(minicapso) {
+		if err := Screenshot("/dev/null", ""); err != nil {
+			log.Println("err:", err)
+		} else {
+			return nil
+		}
+	}
+	// remove first to prevent "text file busy"
+	os.Remove(minicapbin)
+	os.Remove(minicapso)
+
+	minicapSource := filepath.Join(baseurl, "stf-binaries/node_modules/minicap-prebuilt/prebuilt")
 	propOutput, err := runShell("getprop")
 	if err != nil {
 		return err
@@ -74,12 +88,12 @@ func installMinicap() error {
 		sdk = sdk + pre
 	}
 	binURL := strings.Join([]string{minicapSource, abi, "bin", "minicap"}, "/")
-	_, err = httpDownload("/data/local/tmp/minicap", binURL, 0755)
+	_, err = httpDownload(minicapbin, binURL, 0755)
 	if err != nil {
 		return err
 	}
 	libURL := strings.Join([]string{minicapSource, abi, "lib", "android-" + sdk, "minicap.so"}, "/")
-	_, err = httpDownload("/data/local/tmp/minicap.so", libURL, 0644)
+	_, err = httpDownload(minicapso, libURL, 0644)
 	if err != nil {
 		return err
 	}
@@ -87,9 +101,22 @@ func installMinicap() error {
 }
 
 func installMinitouch() error {
-	baseURL := "https://github.com/codeskyblue/stf-binaries/raw/master/node_modules/minitouch-prebuilt/prebuilt"
+	minitouchbin := filepath.Join(expath, "minitouch")
+	baseURL := filepath.Join(baseurl, "stf-binaries/node_modules/minitouch-prebuilt/prebuilt")
 	abi := getCachedProperty("ro.product.cpu.abi")
 	binURL := strings.Join([]string{baseURL, abi, "bin/minitouch"}, "/")
-	_, err := httpDownload("/data/local/tmp/minitouch", binURL, 0755)
+	_, err := httpDownload(minitouchbin, binURL, 0755)
 	return err
+}
+
+func checkUiautomatorInstalled() (ok bool) {
+	pi, err := androidutils.StatPackage("com.github.uiautomator")
+	if err != nil {
+		return
+	}
+	if pi.Version.Code < apkVersionCode {
+		return
+	}
+	_, err = androidutils.StatPackage("com.github.uiautomator.test")
+	return err == nil
 }

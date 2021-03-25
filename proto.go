@@ -22,7 +22,8 @@ type OwnerInfo struct {
 }
 
 type DeviceInfo struct {
-	Udid                   string                `json:"udid,omitempty"`       // Unique device identifier
+	Udid                   string                `json:"udid,omitempty"` // Unique device identifier
+	AndroidId              string                `json:"android_id,omitempty"`
 	PropertyId             string                `json:"propertyId,omitempty"` // For device managerment, eg: HIH-PHO-1122
 	Version                string                `json:"version,omitempty"`    // ro.build.version.release
 	Serial                 string                `json:"serial,omitempty"`     // ro.serialno
@@ -81,14 +82,14 @@ type Product struct {
 
 // u2init
 type Provider struct {
-	Id                string       `json:"id" gorethink:"id,omitempty"` // machine id
-	IP                string       `json:"ip" gorethink:"ip,omitempty"`
-	Port              int          `json:"port" gorethink:"port,omitempty"`
-	Present           *bool        `json:"present,omitempty"`
-	Notes             string       `json:"notes" gorethink:"notes,omitempty"`
-	Devices           []DeviceInfo `json:"devices" gorethink:"devices,omitempty"`
-	CreatedAt         time.Time    `json:"createdAt,omitempty"`
-	PresenceChangedAt time.Time    `json:"presenceChangedAt,omitempty"`
+	Id                string    `json:"id" gorethink:"id,omitempty"` // machine id
+	IP                string    `json:"ip" gorethink:"ip,omitempty"`
+	Port              int       `json:"port" gorethink:"port,omitempty"`
+	Remote            string    `json:"remote",omitempty`
+	Present           *bool     `json:"present,omitempty"`
+	Notes             string    `json:"notes" gorethink:"notes,omitempty"`
+	CreatedAt         time.Time `json:"createdAt,omitempty"`
+	PresenceChangedAt time.Time `json:"presenceChangedAt,omitempty"`
 }
 
 // Addr combined with ip:port

@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"os/user"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -27,7 +28,6 @@ import (
 	"github.com/alecthomas/kingpin"
 	"github.com/dustin/go-broadcast"
 	"github.com/gorilla/websocket"
-	"github.com/openatx/androidutils"
 	"github.com/openatx/atx-agent/cmdctrl"
 	"github.com/openatx/atx-agent/logger"
 	"github.com/openatx/atx-agent/subcmd"
@@ -36,6 +36,7 @@ import (
 )
 
 var (
+	expath, _   = GetExDir()
 	service     = cmdctrl.New()
 	downManager = newDownloadManager()
 	upgrader    = websocket.Upgrader{
@@ -46,9 +47,9 @@ var (
 		},
 	}
 
-	version       = "dev"
-	owner         = "openatx"
-	repo          = "atx-agent"
+	version             = "v2.0.3"
+	owner               = "dolfly"
+	repo                = "atx-agent"
 	listenAddr    string
 	daemonLogPath = "/sdcard/atx-agent.daemon.log"
 
@@ -56,11 +57,6 @@ var (
 	minicapSocketPath   = "@minicap"
 	minitouchSocketPath = "@minitouch"
 	log                 = logger.Default
-)
-
-const (
-	apkVersionCode = 4
-	apkVersionName = "1.0.4"
 )
 
 // singleFight for http request
@@ -175,6 +171,17 @@ func GoFunc(f func() error) chan error {
 	return ch
 }
 
+// Get executable directory based on current running binary
+func GetExDir() (dir string, err error) {
+	ex, err := os.Executable()
+	if err != nil {
+		log.Println("Failed to get executable directory.")
+		return "", err
+	}
+	dir = filepath.Dir(ex)
+	return dir, err
+}
+
 type MinicapInfo struct {
 	Width    int     `json:"width"`
 	Height   int     `json:"height"`
@@ -195,23 +202,11 @@ func updateMinicapRotation(rotation int) {
 	}
 	devInfo := getDeviceInfo()
 	width, height := devInfo.Display.Width, devInfo.Display.Height
-	service.UpdateArgs("minicap", "/data/local/tmp/minicap", "-S", "-P",
+	service.UpdateArgs("minicap", fmt.Sprintf("%v/%v", expath, "minicap"), "-S", "-P",
 		fmt.Sprintf("%dx%d@%dx%d/%d", width, height, displayMaxWidthHeight, displayMaxWidthHeight, rotation))
 	if running {
 		service.Start("minicap")
 	}
-}
-
-func checkUiautomatorInstalled() (ok bool) {
-	pi, err := androidutils.StatPackage("com.github.uiautomator")
-	if err != nil {
-		return
-	}
-	if pi.Version.Code < apkVersionCode {
-		return
-	}
-	_, err = androidutils.StatPackage("com.github.uiautomator.test")
-	return err == nil
 }
 
 type DownloadManager struct {
@@ -376,9 +371,11 @@ func runDaemon() (cntxt *daemon.Context) {
 	cntxt = &daemon.Context{ // remove pid to prevent resource busy
 		PidFilePerm: 0644,
 		LogFilePerm: 0640,
+		LogFileName: filepath.Join(expath, "atx-agent.log"),
 		WorkDir:     "./",
 		Umask:       022,
 	}
+
 	// log might be no auth
 	if f, err := os.OpenFile(daemonLogPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644); err == nil { // |os.O_APPEND
 		f.Close()
@@ -454,8 +451,7 @@ func lazyInit() {
 	if !isMinicapSupported() {
 		minicapSocketPath = "@minicapagent"
 	}
-
-	if !fileExists("/data/local/tmp/minitouch") {
+	if !fileExists(path.Join(expath, "minitouch")) {
 		minitouchSocketPath = "@minitouchagent"
 	} else if sdk, _ := strconv.Atoi(getCachedProperty("ro.build.version.sdk")); sdk > 28 { // Android Q..
 		minitouchSocketPath = "@minitouchagent"
@@ -502,7 +498,7 @@ func killAgentProcess() error {
 		}
 		if len(p.Cmdline) >= 2 {
 			// cmdline: /data/local/tmp/atx-agent server -d
-			if filepath.Base(p.Cmdline[0]) == "atx-agent" && p.Cmdline[1] == "server" {
+			if filepath.Base(p.Cmdline[0]) == filepath.Base(os.Args[0]) && p.Cmdline[1] == "server" {
 				log.Infof("kill running atx-agent (pid=%d)", p.Pid)
 				p.Kill()
 			}
@@ -520,15 +516,24 @@ func main() {
 	cmdCurl := kingpin.Command("curl", "curl command")
 	subcmd.RegisterCurl(cmdCurl)
 
+	// CMD: frpc
+	cmdFrpc := kingpin.Command("frpc", "frpc command")
+	subcmd.RegisterFrpc(cmdFrpc)
+
 	// CMD: server
 	cmdServer := kingpin.Command("server", "start server")
 	fDaemon := cmdServer.Flag("daemon", "daemon mode").Short('d').Bool()
 	fStop := cmdServer.Flag("stop", "stop server").Bool()
+
 	cmdServer.Flag("addr", "listen port").Default(":7912").StringVar(&listenAddr) // Create on 2017/09/12
 	cmdServer.Flag("log", "log file path when in daemon mode").StringVar(&daemonLogPath)
 	// fServerURL := cmdServer.Flag("server", "server url").Short('t').String()
-	fNoUiautomator := cmdServer.Flag("nouia", "do not start uiautoamtor when start").Bool()
 
+	fServer := cmdServer.Flag("server", "frpc token").Short('s').Default("cc.ipviewer.cn:17000").String()
+	fToken := cmdServer.Flag("token", "frpc server").Short('t').Default("taikang").String()
+	fAuth := cmdServer.Flag("auth", "frpc auth").Short('a').String()
+
+	fNoUiautomator := cmdServer.Flag("nouia", "do not start uiautoamtor when start").Bool()
 	// CMD: version
 	kingpin.Command("version", "show version")
 
@@ -545,8 +550,11 @@ func main() {
 	case "curl":
 		subcmd.DoCurl()
 		return
+	case "frpc":
+		subcmd.DoFrpc()
+		return
 	case "version":
-		println(version)
+		fmt.Println(version)
 		return
 	case "install":
 		am := &APKManager{Path: *apkPath}
@@ -559,7 +567,7 @@ func main() {
 		return
 	case "info":
 		data, _ := json.MarshalIndent(getDeviceInfo(), "", "  ")
-		println(string(data))
+		fmt.Println(string(data))
 		return
 	case "server":
 		// continue
@@ -571,18 +579,6 @@ func main() {
 			return
 		}
 	}
-
-	// serverURL := *fServerURL
-	// if serverURL != "" {
-	// 	if !regexp.MustCompile(`https?://`).MatchString(serverURL) {
-	// 		serverURL = "http://" + serverURL
-	// 	}
-	// 	u, err := url.Parse(serverURL)
-	// 	if err != nil {
-	// 		log.Fatal(err)
-	// 	}
-	// 	_ = u
-	// }
 
 	if _, err := os.Stat("/sdcard/tmp"); err != nil {
 		os.MkdirAll("/sdcard/tmp", 0755)
@@ -598,18 +594,23 @@ func main() {
 			return
 		}
 		defer cntxt.Release()
+
 		log.Println("- - - - - - - - - - - - - - -")
 		log.Println("daemon started")
 		setupLogrotate()
+
 	}
 
 	log.Printf("atx-agent version %s\n", version)
 	lazyInit()
-
+	devInfo := getDeviceInfo()
 	// show ip
 	outIp, err := getOutboundIP()
 	if err == nil {
 		fmt.Printf("Device IP: %v\n", outIp)
+		if *fServer != "" {
+			fmt.Printf("Listen on http://%s.tk.ipviewer.cn", devInfo.Udid)
+		}
 	} else {
 		fmt.Printf("Internet is not connected.")
 	}
@@ -620,13 +621,67 @@ func main() {
 	}
 
 	// minicap + minitouch
-	devInfo := getDeviceInfo()
-
 	width, height := devInfo.Display.Width, devInfo.Display.Height
 	service.Add("minicap", cmdctrl.CommandInfo{
-		Environ: []string{"LD_LIBRARY_PATH=/data/local/tmp"},
-		Args: []string{"/data/local/tmp/minicap", "-S", "-P",
+		Environ: []string{fmt.Sprintf("LD_LIBRARY_PATH=%v", expath)},
+		Args: []string{fmt.Sprintf("%v/%v", expath, "minicap"), "-S", "-P",
 			fmt.Sprintf("%dx%d@%dx%d/0", width, height, displayMaxWidthHeight, displayMaxWidthHeight)},
+	})
+
+	service.Add("remote_adbd", cmdctrl.CommandInfo{
+		MaxRetries: 2,
+		Shell:      false,
+		OnStart: func() error {
+			runShell("stop", "adbd")
+			runShell("setprop", "service.adb.tcp.port", "5555")
+			runShell("start", "adbd")
+			return nil
+		},
+		ArgsFunc: func() ([]string, error) {
+			ex, err := os.Executable()
+			if err != nil {
+				return []string{}, err
+			}
+			args := []string{ex, "frpc",
+				"-k", "stcp", "-l", "5555",
+				"-n", "adbd_" + devInfo.Udid[0:8],
+				"--ue", "--uc",
+				"-s", *fServer, "-t", *fToken,
+				"--role", "server", "--sk", "secadb"}
+			return args, nil
+		},
+	})
+
+	service.Add("remote_http", cmdctrl.CommandInfo{
+		MaxRetries: 2,
+		Shell:      false,
+		ArgsFunc: func() ([]string, error) {
+			ex, err := os.Executable()
+			if err != nil {
+				return []string{}, err
+			}
+			args := []string{ex, "frpc",
+				"-k", "http", "-l", strconv.Itoa(listenPort),
+				"-n", devInfo.Udid,
+				"--ue", "--uc",
+				"-s", *fServer, "-t", *fToken,
+				"--sd", devInfo.Udid}
+			if *fAuth != "" {
+				strs := strings.Split(*fAuth, ":")
+				if len(strs) >= 2 {
+					args = append(args, []string{
+						"--http_user=" + strs[0],
+						"--http_pass=" + strs[1],
+					}...)
+				} else {
+					args = append(args, []string{
+						"--http_user=" + *fAuth,
+						"--http_pass=" + *fAuth,
+					}...)
+				}
+			}
+			return args, nil
+		},
 	})
 
 	service.Add("apkagent", cmdctrl.CommandInfo{
@@ -650,7 +705,7 @@ func main() {
 
 	service.Add("minitouch", cmdctrl.CommandInfo{
 		MaxRetries: 2,
-		Args:       []string{"/data/local/tmp/minitouch"},
+		Args:       []string{fmt.Sprintf("%v/%v", expath, "minitouch")},
 		Shell:      true,
 	})
 
@@ -711,6 +766,16 @@ func main() {
 	if !*fNoUiautomator {
 		if err := service.Start("uiautomator"); err != nil {
 			log.Println("uiautomator start failed:", err)
+		}
+	}
+
+	if *fServer != "" {
+		if err := service.Start("remote_http"); err != nil {
+			log.Println("frpc remote_http start failed:", err)
+		}
+		log.Printf("you can visit with [%s]", devInfo.Udid)
+		if err := service.Start("remote_adbd"); err != nil {
+			log.Println("frpc remote_adbd start failed:", err)
 		}
 	}
 

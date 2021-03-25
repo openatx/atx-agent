@@ -21,14 +21,13 @@ import (
 	"time"
 
 	"github.com/openatx/atx-agent/jsonrpc"
+	"github.com/rs/cors"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
-	"github.com/mholt/archiver"
 	"github.com/openatx/androidutils"
 	"github.com/openatx/atx-agent/cmdctrl"
 	"github.com/prometheus/procfs"
-	"github.com/rs/cors"
 )
 
 type Server struct {
@@ -45,7 +44,7 @@ func NewServer() *Server {
 func (server *Server) initHTTPServer() {
 	m := mux.NewRouter()
 
-	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	m.HandleFunc("/home", func(w http.ResponseWriter, r *http.Request) {
 		renderHTML(w, "index.html")
 	})
 
@@ -675,7 +674,7 @@ func (server *Server) initHTTPServer() {
 		}
 
 		if isDir {
-			err = archiver.Zip.Read(file, target)
+			//err = archiver.Zip.Read(file, target)
 		} else {
 			err = copyToFile(file, target)
 		}
@@ -1054,6 +1053,7 @@ func (server *Server) initHTTPServer() {
 		io.WriteString(w, "update finished, restarting")
 		go func() {
 			log.Printf("restarting server")
+			runDaemon()
 			// TODO(ssx): runDaemon()
 		}()
 	})
@@ -1068,7 +1068,7 @@ func (server *Server) initHTTPServer() {
 
 	screenshotIndex := -1
 	nextScreenshotFilename := func() string {
-		targetFolder := "/data/local/tmp/minicap-images"
+		targetFolder := filepath.Join(expath, "minicap-images")
 		if _, err := os.Stat(targetFolder); err != nil {
 			os.MkdirAll(targetFolder, 0755)
 		}
@@ -1103,7 +1103,7 @@ func (server *Server) initHTTPServer() {
 		method := "screencap"
 		if getCachedProperty("ro.product.cpu.abi") == "x86" { // android emulator
 			method = "screencap"
-		} else if fileExists("/data/local/tmp/minicap") && fileExists("/data/local/tmp/minicap.so") && r.FormValue("minicap") != "false" && strings.ToLower(getCachedProperty("ro.product.manufacturer")) != "meizu" {
+		} else if fileExists(filepath.Join(expath, "minicap")) && fileExists(filepath.Join(expath, "minicap.so")) && r.FormValue("minicap") != "false" && strings.ToLower(getCachedProperty("ro.product.manufacturer")) != "meizu" {
 			method = "minicap"
 		} else if service.Running("uiautomator") {
 			method = "uiautomator"
@@ -1131,6 +1131,27 @@ func (server *Server) initHTTPServer() {
 		http.ServeFile(w, r, filename)
 	})
 
+	m.HandleFunc("/ips", func(w http.ResponseWriter, r *http.Request) {
+		iface, err := net.Interfaces()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		ips := []string{}
+		for _, itf := range iface {
+			addrs, err := itf.Addrs()
+			if err != nil {
+				continue
+			}
+			for _, addr := range addrs {
+				if v, ok := addr.(*net.IPNet); ok {
+					ips = append(ips, v.IP.String())
+				}
+			}
+		}
+		renderJSON(w, ips)
+	})
+
 	m.HandleFunc("/wlan/ip", func(w http.ResponseWriter, r *http.Request) {
 		itf, err := net.InterfaceByName("wlan0")
 		if err != nil {
@@ -1151,6 +1172,16 @@ func (server *Server) initHTTPServer() {
 		http.Error(w, "wlan0 have no ip address", 500)
 	})
 	m.Handle("/assets/{(.*)}", http.StripPrefix("/assets", http.FileServer(Assets)))
+
+	fileroot := filepath.Join(expath, "files")
+	if _, err := os.Stat(fileroot); err != nil {
+		os.MkdirAll(fileroot, 0755)
+	}
+	lnksdcard := filepath.Join(fileroot, "sdcard")
+	if _, err := os.Stat(lnksdcard); err != nil {
+		os.Symlink("/sdcard", lnksdcard)
+	}
+	m.PathPrefix("/").Handler(fbHandler(fileroot))
 
 	var handler = cors.New(cors.Options{
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE"},
