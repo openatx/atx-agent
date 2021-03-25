@@ -1,16 +1,11 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"log"
 	"math"
-	"net/url"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/gorilla/websocket"
 	"github.com/openatx/androidutils"
 )
 
@@ -34,7 +29,7 @@ func getDeviceInfo() *DeviceInfo {
 	battery := androidutils.Battery{}
 	battery.Update()
 	devInfo.Battery = &battery
-	devInfo.Port = listenPort
+	// devInfo.Port = listenPort
 
 	memory, err := androidutils.MemoryInfo()
 	if err != nil {
@@ -153,130 +148,130 @@ func getDeviceInfo() *DeviceInfo {
 // 	return nil
 // }
 
-type WSClient struct {
-	// The websocket connection.
-	conn         *websocket.Conn
-	cancelFunc   context.CancelFunc
-	changeEventC chan interface{}
+// type WSClient struct {
+// 	// The websocket connection.
+// 	conn         *websocket.Conn
+// 	cancelFunc   context.CancelFunc
+// 	changeEventC chan interface{}
 
-	host    string
-	udid    string
-	serial  string
-	brand   string
-	model   string
-	version string
-	ip      string
-}
+// 	host    string
+// 	udid    string
+// 	serial  string
+// 	brand   string
+// 	model   string
+// 	version string
+// 	ip      string
+// }
 
-func (c *WSClient) RunForever() {
-	if c.changeEventC == nil {
-		c.changeEventC = make(chan interface{}, 0)
-	}
-	n := 0
-	for {
-		if c.host == "" {
-			<-c.changeEventC
-		}
-		start := time.Now()
-		err := c.Run()
-		if time.Since(start) > 10*time.Second {
-			n = 0
-		}
-		n++
-		if n > 20 {
-			n = 20
-		}
-		waitDuration := 3*time.Second + time.Duration(n)*time.Second
-		log.Println("wait", waitDuration, "error", err)
-		select {
-		case <-time.After(waitDuration):
-		case <-c.changeEventC:
-			log.Println("wait canceled")
-		}
-	}
-}
+// func (c *WSClient) RunForever() {
+// 	if c.changeEventC == nil {
+// 		c.changeEventC = make(chan interface{}, 0)
+// 	}
+// 	n := 0
+// 	for {
+// 		if c.host == "" {
+// 			<-c.changeEventC
+// 		}
+// 		start := time.Now()
+// 		err := c.Run()
+// 		if time.Since(start) > 10*time.Second {
+// 			n = 0
+// 		}
+// 		n++
+// 		if n > 20 {
+// 			n = 20
+// 		}
+// 		waitDuration := 3*time.Second + time.Duration(n)*time.Second
+// 		log.Println("wait", waitDuration, "error", err)
+// 		select {
+// 		case <-time.After(waitDuration):
+// 		case <-c.changeEventC:
+// 			log.Println("wait canceled")
+// 		}
+// 	}
+// }
 
-func (c *WSClient) ChangeHost(host string) {
-	c.host = host
-	if c.changeEventC != nil {
-		c.cancelFunc()
-		c.conn.Close()
-		select {
-		case c.changeEventC <- nil:
-		case <-time.After(1 * time.Second):
-		}
-	}
-}
+// func (c *WSClient) ChangeHost(host string) {
+// 	c.host = host
+// 	if c.changeEventC != nil {
+// 		c.cancelFunc()
+// 		c.conn.Close()
+// 		select {
+// 		case c.changeEventC <- nil:
+// 		case <-time.After(1 * time.Second):
+// 		}
+// 	}
+// }
 
-func (client *WSClient) Run() error {
-	u := url.URL{Scheme: "ws", Host: client.host, Path: "/websocket/heartbeat"}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	client.cancelFunc = cancel
-	defer cancel()
+// func (client *WSClient) Run() error {
+// 	u := url.URL{Scheme: "ws", Host: client.host, Path: "/websocket/heartbeat"}
+// 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+// 	client.cancelFunc = cancel
+// 	defer cancel()
 
-	log.Println("Remote:", u.String())
-	c, _, err := websocket.DefaultDialer.DialContext(ctx, u.String(), nil)
-	if err != nil {
-		return err
-	}
-	client.conn = c
-	defer c.Close()
+// 	log.Println("Remote:", u.String())
+// 	c, _, err := websocket.DefaultDialer.DialContext(ctx, u.String(), nil)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	client.conn = c
+// 	defer c.Close()
 
-	c.WriteJSON(map[string]interface{}{
-		"command":  "handshake",
-		"name":     "phone",
-		"owner":    nil,
-		"secret":   "",
-		"url":      client.ip + ":7912",
-		"priority": 1,
-	})
+// 	c.WriteJSON(map[string]interface{}{
+// 		"command":  "handshake",
+// 		"name":     "phone",
+// 		"owner":    nil,
+// 		"secret":   "",
+// 		"url":      client.ip + ":7912",
+// 		"priority": 1,
+// 	})
 
-	var response WSResponse
-	if err = c.ReadJSON(&response); err != nil {
-		log.Fatal(err)
-	}
-	if !response.Success {
-		log.Fatal(response.Description)
-	}
+// 	var response WSResponse
+// 	if err = c.ReadJSON(&response); err != nil {
+// 		log.Fatal(err)
+// 	}
+// 	if !response.Success {
+// 		log.Fatal(response.Description)
+// 	}
 
-	log.Println("update android device")
-	c.WriteJSON(map[string]interface{}{
-		"command":  "update",
-		"platform": "android",
-		"udid":     client.udid,
-		"properties": map[string]string{
-			"serial":  client.serial,  // ro.serialno
-			"brand":   client.brand,   // ro.product.brand
-			"model":   client.model,   // ro.product.model
-			"version": client.version, // ro.build.version.release
-		},
-		"provider": map[string]string{
-			"atxAgentAddress":      client.ip + ":7912",
-			"remoteConnectAddress": client.ip + ":5555",
-			"whatsInputAddress":    client.ip + ":6677",
-		},
-	})
+// 	log.Println("update android device")
+// 	c.WriteJSON(map[string]interface{}{
+// 		"command":  "update",
+// 		"platform": "android",
+// 		"udid":     client.udid,
+// 		"properties": map[string]string{
+// 			"serial":  client.serial,  // ro.serialno
+// 			"brand":   client.brand,   // ro.product.brand
+// 			"model":   client.model,   // ro.product.model
+// 			"version": client.version, // ro.build.version.release
+// 		},
+// 		"provider": map[string]string{
+// 			"atxAgentAddress":      client.ip + ":7912",
+// 			"remoteConnectAddress": client.ip + ":5555",
+// 			"whatsInputAddress":    client.ip + ":6677",
+// 		},
+// 	})
 
-	for {
-		response = WSResponse{}
-		err = c.ReadJSON(&response)
-		if err != nil {
-			log.Println("read:", err)
-			return err
-		}
-		if response.Command == "release" {
-			c.WriteJSON(map[string]interface{}{
-				"command": "update",
-				"udid":    client.udid,
-				"colding": false,
-			})
-		}
-	}
-}
+// 	for {
+// 		response = WSResponse{}
+// 		err = c.ReadJSON(&response)
+// 		if err != nil {
+// 			log.Println("read:", err)
+// 			return err
+// 		}
+// 		if response.Command == "release" {
+// 			c.WriteJSON(map[string]interface{}{
+// 				"command": "update",
+// 				"udid":    client.udid,
+// 				"colding": false,
+// 			})
+// 		}
+// 	}
+// }
 
-type WSResponse struct {
-	Success     bool   `json:"success"`
-	Description string `json:"description"`
-	Command     string `json:"command"`
-	Udid        string `json:"udid"`
-}
+// type WSResponse struct {
+// 	Success     bool   `json:"success"`
+// 	Description string `json:"description"`
+// 	Command     string `json:"command"`
+// 	Udid        string `json:"udid"`
+// }

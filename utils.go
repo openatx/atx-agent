@@ -9,7 +9,6 @@ import (
 	"image"
 	"io"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"os"

@@ -7,7 +7,6 @@ import (
 	"image/jpeg"
 	"io"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -23,7 +22,6 @@ import (
 
 	"github.com/openatx/atx-agent/jsonrpc"
 
-	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
 	"github.com/mholt/archiver"
@@ -1157,8 +1155,8 @@ func (server *Server) initHTTPServer() {
 	var handler = cors.New(cors.Options{
 		AllowedMethods: []string{"GET", "POST", "PUT", "DELETE"},
 	}).Handler(m)
-	logHandler := handlers.LoggingHandler(os.Stdout, handler)
-	server.httpServer = &http.Server{Handler: logHandler} // url(/stop) need it.
+	// logHandler := handlers.LoggingHandler(os.Stdout, handler)
+	server.httpServer = &http.Server{Handler: handler} // url(/stop) need it.
 }
 
 func (s *Server) Serve(lis net.Listener) error {

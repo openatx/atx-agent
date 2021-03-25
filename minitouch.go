@@ -7,8 +7,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net"
-
-	"github.com/qiniu/log"
 )
 
 type toucher struct {
