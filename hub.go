@@ -27,6 +27,42 @@ func newHub() *Hub {
 	}
 }
 
+func (h *Hub) _startScrcpyAgent(ctx context.Context) {
+	h.broadcast <- []byte("welcome new client, scrcpy is launching")
+	service.Start("scrcpy")
+
+	retries := 0
+	for {
+		if retries > 10 {
+			log.Println("unix @scrcpy connect failed")
+			h.broadcast <- []byte("@scrcpy listen timeout, possibly scrcpy not installed")
+			break
+		}
+
+		conn, err := net.Dial("unix", "@scrcpy")
+		if err != nil {
+			retries++
+			log.Printf("dial @scrcpy err: %v, wait 0.5s", err)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(500 * time.Millisecond):
+			}
+			continue
+		}
+		h.broadcast <- []byte("rotation " + strconv.Itoa(deviceRotation))
+		retries = 0 // connected, reset retries
+		if er := translateMinicap(conn, h.broadcast, ctx); er == nil {
+			conn.Close()
+			log.Println("transfer closed")
+			break
+		} else {
+			conn.Close()
+			log.Println("translateMinicap error:", er) //scrcpy read error, try to read again")
+		}
+	}
+}
+
 func (h *Hub) _startTranslate(ctx context.Context) {
 	h.broadcast <- []byte("welcome")
 	if minicapSocketPath == "@minicap" {

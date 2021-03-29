@@ -73,7 +73,13 @@ func New() *CommandCtrl {
 		cmds: make(map[string]*processKeeper, 10),
 	}
 }
-
+func (cc *CommandCtrl) Cmds() []string {
+	names := []string{}
+	for n := range cc.cmds {
+		names = append(names, n)
+	}
+	return names
+}
 func (cc *CommandCtrl) Exists(name string) bool {
 	cc.rl.RLock()
 	defer cc.rl.RUnlock()

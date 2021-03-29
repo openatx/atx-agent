@@ -82,8 +82,8 @@ type Product struct {
 // u2init
 type Provider struct {
 	Id                string    `json:"id" gorethink:"id,omitempty"` // machine id
-	Local             string    `json:"local",omitempty`
-	Remote            string    `json:"remote",omitempty`
+	Local             string    `json:"local,omitempty"`
+	Remote            string    `json:"remote,omitempty"`
 	Present           *bool     `json:"present,omitempty"`
 	Notes             string    `json:"notes" gorethink:"notes,omitempty"`
 	CreatedAt         time.Time `json:"createdAt,omitempty"`

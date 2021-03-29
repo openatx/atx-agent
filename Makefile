@@ -14,9 +14,7 @@ pre:
 
 bin/atx-agent: self
 	bin/atx-agent version 2>/dev/null >latest
-bin/atx-agent-arm64: arm64
-bin/atx-agent-arm: arm
-upload: bin/atx-agent bin/atx-agent.arm64 bin/atx-agent.arm
+upload: bin/atx-agent arm64 arm x86
 	bcecmd bos cp bin/atx-agent.x86 bos:/safe-sig/opinit/atx-agent/atx-agent_$(shell cat latest)_linux_386
 	bcecmd bos cp bin/atx-agent.arm64 bos:/safe-sig/opinit/atx-agent/atx-agent_$(shell cat latest)_linux_armv7
 	bcecmd bos cp bin/atx-agent.arm64 bos:/safe-sig/opinit/atx-agent/atx-agent_$(shell cat latest)_linux_arm64

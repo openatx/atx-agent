@@ -47,7 +47,7 @@ var (
 		},
 	}
 
-	version       = "v2.0.8"
+	version       = "v2.0.9"
 	owner         = "dolfly"
 	repo          = "atx-agent"
 	listenAddr    string
@@ -628,6 +628,29 @@ func main() {
 			fmt.Sprintf("%dx%d@%dx%d/0", width, height, displayMaxWidthHeight, displayMaxWidthHeight)},
 	})
 
+	service.Add("scrcpy", cmdctrl.CommandInfo{
+		OnStart: func() error {
+			log.Println("killProcessByName scrcpy.cli")
+			// killProcessByName("scrcpy.cli")
+			return nil
+		},
+		ArgsFunc: func() ([]string, error) {
+			pmPathOutput, err := Command{
+				Args:  []string{"pm", "path", "com.github.uiautomator"},
+				Shell: true,
+			}.CombinedOutputString()
+			if err != nil {
+				return nil, err
+			}
+			if !strings.HasPrefix(pmPathOutput, "package:") {
+				return nil, errors.New("invalid pm path output: " + pmPathOutput)
+			}
+			packagePath := strings.TrimSpace(pmPathOutput[len("package:"):])
+			return []string{"CLASSPATH=" + packagePath, "exec", "app_process", "/system/bin", "com.github.uiautomator.ScrcpyAgent"}, nil
+		},
+		Shell: true,
+	})
+
 	service.Add("remote_adbd", cmdctrl.CommandInfo{
 		MaxRetries: 2,
 		Shell:      false,
@@ -713,8 +736,27 @@ func main() {
 
 	service.Add("minitouch", cmdctrl.CommandInfo{
 		MaxRetries: 2,
-		Args:       []string{fmt.Sprintf("%v/%v", expath, "minitouch")},
-		Shell:      true,
+		ArgsFunc: func() ([]string, error) {
+			sdk, err := strconv.Atoi(getCachedProperty("ro.build.version.sdk"))
+			if err != nil || sdk <= 28 { // Android P(sdk:28)
+				minitouchSocketPath = "@minitouch"
+				return []string{fmt.Sprintf("%v/%v", expath, "minitouch")}, nil
+			}
+			minitouchSocketPath = "@minitouchagent"
+			pmPathOutput, err := Command{
+				Args:  []string{"pm", "path", "com.github.uiautomator"},
+				Shell: true,
+			}.CombinedOutputString()
+			if err != nil {
+				return nil, err
+			}
+			if !strings.HasPrefix(pmPathOutput, "package:") {
+				return nil, errors.New("invalid pm path output: " + pmPathOutput)
+			}
+			packagePath := strings.TrimSpace(pmPathOutput[len("package:"):])
+			return []string{"CLASSPATH=" + packagePath, "exec", "app_process", "/system/bin", "com.github.uiautomator.MinitouchAgent"}, nil
+		},
+		Shell: true,
 	})
 
 	// uiautomator 1.0

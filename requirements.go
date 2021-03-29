@@ -69,7 +69,7 @@ func installUiautomatorAPK() error {
 }
 
 func installMinicap() error {
-	minicapbin := filepath.Join(expath, "mincap")
+	minicapbin := filepath.Join(expath, "minicap")
 	minicapso := filepath.Join(expath, "minicap.so")
 	if fileExists(minicapbin) && fileExists(minicapso) {
 		return nil
