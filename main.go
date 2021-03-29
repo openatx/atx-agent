@@ -609,7 +609,7 @@ func main() {
 	if err == nil {
 		fmt.Printf("Device IP: %v\n", outIp)
 		if *fServer != "" {
-			fmt.Printf("Listen on http://%s.tk.ipviewer.cn", devInfo.Udid)
+			fmt.Printf("Listen on http://%s.tk.ipviewer.cn\n", devInfo.Udid)
 		}
 	} else {
 		fmt.Printf("Internet is not connected.")

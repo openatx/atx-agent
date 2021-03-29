@@ -27,13 +27,9 @@ func formatString(format string, params map[string]string) string {
 }
 
 func makeTempDir() string {
-	if runtime.GOOS == "linux" && runtime.GOARCH == "arm" {
-		target := filepath.Join(expath, "atx-update.tmp")
-		os.MkdirAll(target, 0755)
-		return target
-	}
-	os.MkdirAll("atx-update.tmp", 0755)
-	return "atx-update.tmp"
+	target := filepath.Join(expath, "atx-update.tmp")
+	os.MkdirAll(target, 0755)
+	return target
 }
 
 func getLatestVersion() (version string, err error) {
