@@ -17,9 +17,7 @@ import (
 	"github.com/mitchellh/ioprogress"
 )
 
-var baseurl string = "https://safe-sig.bj.bcebos.com/opinit/atx-agent"
-
-//var baseurl string = "http://192.168.2.250/atx-agent"
+var baseurl string = "safe-sig.bj.bcebos.com/opinit/atx-agent"
 
 func formatString(format string, params map[string]string) string {
 	for k, v := range params {
@@ -40,7 +38,7 @@ func makeTempDir() string {
 
 func getLatestVersion() (version string, err error) {
 	res, err := goreq.Request{
-		Uri: baseurl + "/latest",
+		Uri: "http://" + baseurl + "/latest",
 	}.Do()
 	if err != nil {
 		return
@@ -67,13 +65,13 @@ func doUpdate(version string) (err error) {
 	log.Printf("update file: %s", filename)
 
 	// fixed get latest version
-	uri := formatString("{baseurl}/{filename}", map[string]string{
+	atxAgentUrl := formatString("http://{baseurl}/{filename}", map[string]string{
 		"baseurl":  baseurl,
 		"filename": filename,
 	})
-	log.Printf("update url: %s", uri)
+	log.Printf("update url: %s", atxAgentUrl)
 	res, err := goreq.Request{
-		Uri:             uri,
+		Uri:             atxAgentUrl,
 		MaxRedirects:    10,
 		RedirectHeaders: true,
 	}.Do()

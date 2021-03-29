@@ -47,7 +47,7 @@ var (
 		},
 	}
 
-	version       = "v2.0.7"
+	version       = "v2.0.8"
 	owner         = "dolfly"
 	repo          = "atx-agent"
 	listenAddr    string

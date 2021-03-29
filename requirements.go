@@ -1,25 +1,34 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
-	"strings"
 
 	"github.com/openatx/androidutils"
 )
 
 const (
-	apkVersionCode = 4
-	apkVersionName = "1.0.4"
+	apkVersionName = "2.3.3"
 )
+
+func init() {
+	go installRequirements()
+}
 
 func installRequirements() error {
 	log.Println("install uiautomator apk")
 	if err := installUiautomatorAPK(); err != nil {
 		return err
 	}
+
+	log.Println("install minitouch")
+	if err := installMinitouch(); err != nil {
+		return err
+	}
+
+	log.Println("install minicap")
 	return installMinicap()
 }
 
@@ -30,33 +39,45 @@ func installUiautomatorAPK() error {
 	if checkUiautomatorInstalled() {
 		return nil
 	}
-	baseURL := filepath.Join(baseurl, "uiautomator", apkVersionName)
-	appdebug := filepath.Join(expath, "app-debug.apk")
-	appdebugtest := filepath.Join(expath, "app-debug-test.apk")
-	filepath.Join(expath, "app-debug.apk")
-	if _, err := httpDownload(appdebug, baseURL+"/app-uiautomator.apk", 0644); err != nil {
+	appDebug := filepath.Join(expath, "app-debug.apk")
+	appDebugURL := formatString("http://{baseurl}/uiautomator/{version}/{apk}", map[string]string{
+		"baseurl": baseurl,
+		"version": apkVersionName,
+		"apk":     "app-uiautomator.apk",
+	})
+	if _, err := httpDownload(appDebug, appDebugURL, 0644); err != nil {
 		return err
 	}
-	if _, err := httpDownload(appdebugtest, baseURL+"/app-uiautomator-test.apk", 0644); err != nil {
+	if err := forceInstallAPK(appDebug); err != nil {
 		return err
 	}
-	if err := forceInstallAPK(appdebug); err != nil {
+
+	appDebugTest := filepath.Join(expath, "app-debug-test.apk")
+	appDebugTestURL := formatString("http://{baseurl}/uiautomator/{version}/{apk}", map[string]string{
+		"baseurl": baseurl,
+		"version": apkVersionName,
+		"apk":     "app-uiautomator.apk",
+	})
+	if _, err := httpDownload(appDebugTest, appDebugTestURL, 0644); err != nil {
 		return err
 	}
-	if err := forceInstallAPK(appdebugtest); err != nil {
+	if err := forceInstallAPK(appDebugTest); err != nil {
 		return err
 	}
+
 	return nil
 }
 
 func installMinicap() error {
 	minicapbin := filepath.Join(expath, "mincap")
 	minicapso := filepath.Join(expath, "minicap.so")
+	if fileExists(minicapbin) && fileExists(minicapso) {
+		return nil
+	}
 	if runtime.GOOS == "windows" {
 		return nil
 	}
 	log.Println("install minicap")
-
 	if fileExists(minicapbin) && fileExists(minicapso) {
 		if err := Screenshot("/dev/null", ""); err != nil {
 			log.Println("err:", err)
@@ -68,31 +89,34 @@ func installMinicap() error {
 	os.Remove(minicapbin)
 	os.Remove(minicapso)
 
-	minicapSource := filepath.Join(baseurl, "stf-binaries/node_modules/minicap-prebuilt/prebuilt")
-	propOutput, err := runShell("getprop")
-	if err != nil {
-		return err
-	}
-	re := regexp.MustCompile(`\[(.*?)\]:\s*\[(.*?)\]`)
-	matches := re.FindAllStringSubmatch(string(propOutput), -1)
-	props := make(map[string]string)
-	for _, m := range matches {
-		var key = m[1]
-		var val = m[2]
-		props[key] = val
-	}
-	abi := props["ro.product.cpu.abi"]
-	sdk := props["ro.build.version.sdk"]
-	pre := props["ro.build.version.preview_sdk"]
+	abi := getCachedProperty("ro.product.cpu.abi")
+	sdk := getCachedProperty("ro.build.version.sdk")
+	pre := getCachedProperty("ro.build.version.preview_sdk")
 	if pre != "" && pre != "0" {
 		sdk = sdk + pre
 	}
-	binURL := strings.Join([]string{minicapSource, abi, "bin", "minicap"}, "/")
-	_, err = httpDownload(minicapbin, binURL, 0755)
+
+	binURL := formatString("http://{baseurl}/{path}/{abi}/{bin}", map[string]string{
+		"baseurl": baseurl,
+		"path":    "stf-binaries/node_modules/minicap-prebuilt/prebuilt",
+		"abi":     abi,
+		"bin":     "bin/minicap",
+	})
+
+	//binURL := strings.Join([]string{minicapSource, abi, "bin", "minicap"}, "/")
+	_, err := httpDownload(minicapbin, binURL, 0755)
 	if err != nil {
 		return err
 	}
-	libURL := strings.Join([]string{minicapSource, abi, "lib", "android-" + sdk, "minicap.so"}, "/")
+
+	libURL := formatString("http://{baseurl}/{path}/{abi}/lib/{lib}/{so}", map[string]string{
+		"baseurl": baseurl,
+		"path":    "stf-binaries/node_modules/minicap-prebuilt/prebuilt",
+		"abi":     abi,
+		"lib":     "android-" + sdk,
+		"so":      "minicap.so",
+	})
+	//libURL := strings.Join([]string{minicapSource, abi, "lib", "android-" + sdk, "minicap.so"}, "/")
 	_, err = httpDownload(minicapso, libURL, 0644)
 	if err != nil {
 		return err
@@ -102,21 +126,31 @@ func installMinicap() error {
 
 func installMinitouch() error {
 	minitouchbin := filepath.Join(expath, "minitouch")
-	baseURL := filepath.Join(baseurl, "stf-binaries/node_modules/minitouch-prebuilt/prebuilt")
-	abi := getCachedProperty("ro.product.cpu.abi")
-	binURL := strings.Join([]string{baseURL, abi, "bin/minitouch"}, "/")
+	if fileExists(minitouchbin) {
+		return nil
+	}
+	binURL := formatString("http://{baseurl}/{path}/{abi}/{bin}", map[string]string{
+		"baseurl": baseurl,
+		"path":    "stf-binaries/node_modules/minitouch-prebuilt/prebuilt",
+		"abi":     getCachedProperty("ro.product.cpu.abi"),
+		"bin":     "bin/minitouch",
+	})
 	_, err := httpDownload(minitouchbin, binURL, 0755)
 	return err
 }
 
 func checkUiautomatorInstalled() (ok bool) {
-	pi, err := androidutils.StatPackage("com.github.uiautomator")
-	if err != nil {
-		return
+	if pi, err := androidutils.StatPackage("com.github.uiautomator"); err == nil {
+		fmt.Printf("uiautomator\nversion name:(%s)\nversion code:(%d)",
+			pi.Version.Name, pi.Version.Code)
+	} else {
+		return false
 	}
-	if pi.Version.Code < apkVersionCode {
-		return
+	if pi, err := androidutils.StatPackage("com.github.uiautomator.test"); err == nil {
+		fmt.Printf("uiautomator test\nversion name:(%s)\nversion code:(%d)",
+			pi.Version.Name, pi.Version.Code)
+	} else {
+		return false
 	}
-	_, err = androidutils.StatPackage("com.github.uiautomator.test")
-	return err == nil
+	return true
 }
