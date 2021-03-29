@@ -98,7 +98,7 @@ func installMinicap() error {
 
 	binURL := formatString("http://{baseurl}/{path}/{abi}/{bin}", map[string]string{
 		"baseurl": baseurl,
-		"path":    "stf-binaries/node_modules/minicap-prebuilt/prebuilt",
+		"path":    "stf-binaries/node_modules/@devicefarmer/minicap-prebuilt/prebuilt",
 		"abi":     abi,
 		"bin":     "bin/minicap",
 	})
@@ -111,7 +111,7 @@ func installMinicap() error {
 
 	libURL := formatString("http://{baseurl}/{path}/{abi}/lib/{lib}/{so}", map[string]string{
 		"baseurl": baseurl,
-		"path":    "stf-binaries/node_modules/minicap-prebuilt/prebuilt",
+		"path":    "stf-binaries/node_modules/@devicefarmer/minicap-prebuilt/prebuilt",
 		"abi":     abi,
 		"lib":     "android-" + sdk,
 		"so":      "minicap.so",
@@ -131,7 +131,7 @@ func installMinitouch() error {
 	}
 	binURL := formatString("http://{baseurl}/{path}/{abi}/{bin}", map[string]string{
 		"baseurl": baseurl,
-		"path":    "stf-binaries/node_modules/minitouch-prebuilt/prebuilt",
+		"path":    "stf-binaries/node_modules/@devicefarmer/minitouch-prebuilt/prebuilt",
 		"abi":     getCachedProperty("ro.product.cpu.abi"),
 		"bin":     "bin/minitouch",
 	})
