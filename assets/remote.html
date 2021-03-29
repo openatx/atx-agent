@@ -8,9 +8,9 @@
   <title>Remote control</title>
 </head>
 <body>
-  <div id="app">
+  <div id="app" style="display: flex;align-items: center;justify-content: center;">
     <!-- <h3>极简手机远程控制 <small style="color: gray" v-text="message"></small></h3> -->
-    <div style="margin: 5px 0px">
+    <div style="margin: 0px auto">
       <img ref="display" style="border: 1px solid blue;" />
     </div>
     <div style="display:none">
@@ -134,7 +134,7 @@
       methods: {
         keyevent(key) {
           return $.ajax({
-            url: "/shell",
+            url: location.toString().replace("remote","shell"),
             method: "post",
             data: {
               command: "input keyevent " + key,
@@ -143,7 +143,7 @@
         },
         runCommand() {
           return $.ajax({
-            url: "/shell",
+            url: location.toString().replace("remote","shell"),
             method: "post",
             data: {
               command: this.command,
@@ -157,7 +157,8 @@
         },
         refreshImg() {
           this.notify("image loading ...")
-          this.img.src = `http://${location.host}/screenshot?t=${new Date().getTime()}`
+          this.img.src = location.toString().replace("remote",`screenshot?t=${new Date().getTime()}`)
+          //this.img.src = `http://${location.host}/screenshot?t=${new Date().getTime()}`
         },
         syncTouchpad() {
           const element = this.img;
@@ -197,8 +198,8 @@
             element.addEventListener('mousemove', mouseMoveListener);
             document.addEventListener("mouseup", mouseUpListener)
           }
-
-          let ws = new WebSocket("ws://" + location.host + "/minitouch")
+          minitouchurl = location.toString().replace("http://","ws://").replace("https://","wss://").replace("remote","minitouch")
+          let ws = new WebSocket(minitouchurl)
 
           ws.onopen = (ret) => {
             this.readonly = false
@@ -222,13 +223,15 @@
           }
         },
         syncDisplay(canvas) {
-          let ws = new WebSocket('ws://' + location.host + "/minicap")
+          minicapurl = location.toString().replace("http://","ws://").replace("https://","wss://").replace("remote","minicap")
+          let ws = new WebSocket(minicapurl)
           ws.onclose = () => {
-            var warn = document.createElement("div")
-            warn.innerText = "Websocket closed, Refresh to reload."
-            warn.style.color = "red"
-            warn.style.fontSize = "20px"
-            document.body.appendChild(warn);
+            // var warn = document.createElement("div")
+            // warn.innerText = "Websocket closed, Refresh to reload."
+            // warn.style.color = "red"
+            // warn.style.fontSize = "20px"
+            // document.body.appendChild(warn);
+            location.refresh()
           }
           ws.onerror = function () {
             console.log('onerror', arguments)

@@ -34,7 +34,8 @@
   <script src="https://cdn.jsdelivr.net/npm/cos-jquery-resize@1.1.0/jquery.ba-resize.min.js"></script>
   <script>
     var term;
-    var websocket = new WebSocket("ws://" + location.host + "/term");
+    termurl = location.toString().replace("http://","ws://").replace("https://","wss://")
+    var websocket = new WebSocket(termurl);
     websocket.binaryType = "arraybuffer";
     function ab2str(buf) {
       return String.fromCharCode.apply(null, new Uint8Array(buf));
