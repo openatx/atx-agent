@@ -226,12 +226,12 @@
           minicapurl = location.toString().replace("http://","ws://").replace("https://","wss://").replace("remote","minicap")
           let ws = new WebSocket(minicapurl)
           ws.onclose = () => {
-            // var warn = document.createElement("div")
-            // warn.innerText = "Websocket closed, Refresh to reload."
-            // warn.style.color = "red"
-            // warn.style.fontSize = "20px"
-            // document.body.appendChild(warn);
-            location.refresh()
+            var warn = document.createElement("div")
+            warn.innerText = "Websocket closed, Refresh to reload."
+            warn.style.color = "red"
+            warn.style.fontSize = "20px"
+            document.body.appendChild(warn);
+            location.reload()
           }
           ws.onerror = function () {
             console.log('onerror', arguments)

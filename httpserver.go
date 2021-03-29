@@ -1060,8 +1060,13 @@ func (server *Server) initHTTPServer() {
 				fmt.Printf("get exec error %s\n", err)
 				return
 			}
-			runShell(ex, "server", "-d", "--stop")
 			// TODO(ssx): runDaemon()
+			cntxt := runDaemon()
+			if cntxt == nil {
+				return
+			}
+			defer cntxt.Release()
+			runShell(ex, "server", "--stop", "-d")
 		}()
 	})
 
