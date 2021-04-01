@@ -28,6 +28,8 @@ import (
 	"github.com/alecthomas/kingpin"
 	"github.com/dustin/go-broadcast"
 	"github.com/gorilla/websocket"
+	verutil "github.com/mcuadros/go-version"
+	"github.com/openatx/androidutils"
 	"github.com/openatx/atx-agent/cmdctrl"
 	"github.com/openatx/atx-agent/logger"
 	"github.com/openatx/atx-agent/subcmd"
@@ -780,13 +782,26 @@ func main() {
 
 	// uiautomator 2.0
 	service.Add("uiautomator", cmdctrl.CommandInfo{
-		Args: []string{"am", "instrument", "-w", "-r",
-			"-e", "debug", "false",
-			"-e", "class", "com.github.uiautomator.stub.Stub",
-			// old android-uiautomator-server.apk
-			// "com.github.uiautomator.test/androidx.test.runner.AndroidJUnitRunner"},
-			// update for android-uiautomator-server.apk>=2.3.2
-			"com.github.uiautomator.test/android.support.test.runner.AndroidJUnitRunner"},
+		ArgsFunc: func() ([]string, error) {
+			args := []string{
+				"am", "instrument", "-w", "-r",
+				"-e", "debug", "false",
+				"-e", "class", "com.github.uiautomator.stub.Stub",
+			}
+			// >=2.3.2
+			androidx := "com.github.uiautomator.test/androidx.test.runner.AndroidJUnitRunner"
+			// < 2.3.2
+			androids := "com.github.uiautomator.test/android.support.test.runner.AndroidJUnitRunner"
+			pi, err := androidutils.StatPackage("com.github.uiautomator")
+			if err != nil {
+				//default use >=2.3.3
+				return append(args, androidx), nil
+			}
+			if !verutil.Compare(pi.Version.Name, "2.3.2", ">=") {
+				return append(args, androids), nil
+			}
+			return append(args, androids), nil
+		},
 		Stdout:          os.Stdout,
 		Stderr:          os.Stderr,
 		MaxRetries:      2, // only once
@@ -795,14 +810,14 @@ func main() {
 		OnStart: func() error {
 			uiautomatorTimer.Reset()
 			// log.Println("service uiautomator: startservice com.github.uiautomator/.Service")
-			runShell("am", "startservice", "-n", "com.github.uiautomator/.Service")
+			// runShell("am", "startservice", "-n", "com.github.uiautomator/.Service")
 			return nil
 		},
 		OnStop: func() {
 			uiautomatorTimer.Stop()
 			// log.Println("service uiautomator: stopservice com.github.uiautomator/.Service")
-			runShell("am", "stopservice", "-n", "com.github.uiautomator/.Service")
-			runShell("am", "force-stop", "com.github.uiautomator")
+			// runShell("am", "stopservice", "-n", "com.github.uiautomator/.Service")
+			// runShell("am", "force-stop", "com.github.uiautomator")
 		},
 	})
 
