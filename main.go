@@ -783,24 +783,26 @@ func main() {
 		Args: []string{"am", "instrument", "-w", "-r",
 			"-e", "debug", "false",
 			"-e", "class", "com.github.uiautomator.stub.Stub",
-			"com.github.uiautomator.test/androidx.test.runner.AndroidJUnitRunner"}, // update for android-uiautomator-server.apk>=2.3.2
-		//"com.github.uiautomator.test/android.support.test.runner.AndroidJUnitRunner"},
+			// old android-uiautomator-server.apk
+			// "com.github.uiautomator.test/androidx.test.runner.AndroidJUnitRunner"},
+			// update for android-uiautomator-server.apk>=2.3.2
+			"com.github.uiautomator.test/android.support.test.runner.AndroidJUnitRunner"},
 		Stdout:          os.Stdout,
 		Stderr:          os.Stderr,
-		MaxRetries:      1, // only once
-		RecoverDuration: 30 * time.Second,
+		MaxRetries:      2, // only once
+		RecoverDuration: 60 * time.Second,
 		StopSignal:      os.Interrupt,
 		OnStart: func() error {
 			uiautomatorTimer.Reset()
 			// log.Println("service uiautomator: startservice com.github.uiautomator/.Service")
-			// runShell("am", "startservice", "-n", "com.github.uiautomator/.Service")
+			runShell("am", "startservice", "-n", "com.github.uiautomator/.Service")
 			return nil
 		},
 		OnStop: func() {
 			uiautomatorTimer.Stop()
 			// log.Println("service uiautomator: stopservice com.github.uiautomator/.Service")
-			// runShell("am", "stopservice", "-n", "com.github.uiautomator/.Service")
-			// runShell("am", "force-stop", "com.github.uiautomator")
+			runShell("am", "stopservice", "-n", "com.github.uiautomator/.Service")
+			runShell("am", "force-stop", "com.github.uiautomator")
 		},
 	})
 
@@ -854,9 +856,7 @@ func main() {
 			log.Println("Ignore signal", sig)
 		}
 	}()
-
 	service.Start("minitouch")
-
 	// run server forever
 	if err := server.Serve(listener); err != nil {
 		log.Println("server quit:", err)
