@@ -406,7 +406,7 @@ func (server *Server) initHTTPServer() {
 	})
 	m.HandleFunc("/services", func(w http.ResponseWriter, r *http.Request) {
 		renderJSON(w, service.Cmds())
-	})
+	}).Methods("GET")
 	m.HandleFunc("/services/{name}", func(w http.ResponseWriter, r *http.Request) {
 		name := mux.Vars(r)["name"]
 		var resp map[string]interface{}

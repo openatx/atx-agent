@@ -27,6 +27,7 @@ require (
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/kr/binarydist v0.1.0 // indirect
 	github.com/levigross/grequests v0.0.0-20190130132859-37c80f76a0da
+	github.com/mcuadros/go-version v0.0.0-20190830083331-035f6764e8d2
 	github.com/mitchellh/ioprogress v0.0.0-20180201004757-6a23b12fa88e
 	github.com/openatx/androidutils v1.0.0
 	github.com/oxtoacart/bpool v0.0.0-20150712133111-4e1c5567d7c2 // indirect
@@ -36,6 +37,8 @@ require (
 	github.com/rs/cors v1.6.0
 	github.com/sevlyar/go-daemon v0.1.4
 	github.com/shogo82148/androidbinary v1.0.1
+	github.com/shurcooL/httpfs v0.0.0-20190707220628-8d4bc4ba7749 // indirect
+	github.com/shurcooL/vfsgen v0.0.0-20200824052919-0d455de96546 // indirect
 	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/testify v1.6.1
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0

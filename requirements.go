@@ -18,11 +18,10 @@ func init() {
 }
 
 func installRequirements() error {
-	log.Println("install uiautomator apk")
-	if err := installUiautomatorAPK(); err != nil {
-		return err
-	}
-
+	// log.Println("install uiautomator apk")
+	// if err := installUiautomatorAPK(); err != nil {
+	// 	return err
+	// }
 	log.Println("install minitouch")
 	if err := installMinitouch(); err != nil {
 		return err
@@ -39,7 +38,7 @@ func installUiautomatorAPK() error {
 	if checkUiautomatorInstalled() {
 		return nil
 	}
-	appDebug := filepath.Join(expath, "app-debug.apk")
+	appDebug := filepath.Join(expath, "app-uiautomator.apk")
 	appDebugURL := formatString("http://{baseurl}/uiautomator/{version}/{apk}", map[string]string{
 		"baseurl": baseurl,
 		"version": apkVersionName,
@@ -52,11 +51,11 @@ func installUiautomatorAPK() error {
 		return err
 	}
 
-	appDebugTest := filepath.Join(expath, "app-debug-test.apk")
+	appDebugTest := filepath.Join(expath, "app-uiautomator-test.apk")
 	appDebugTestURL := formatString("http://{baseurl}/uiautomator/{version}/{apk}", map[string]string{
 		"baseurl": baseurl,
 		"version": apkVersionName,
-		"apk":     "app-uiautomator.apk",
+		"apk":     "app-uiautomator-test.apk",
 	})
 	if _, err := httpDownload(appDebugTest, appDebugTestURL, 0644); err != nil {
 		return err
