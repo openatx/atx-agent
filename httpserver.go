@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/openatx/atx-agent/jsonrpc"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/gorilla/mux"
 	"github.com/gorilla/websocket"
@@ -48,6 +49,8 @@ func (server *Server) initHTTPServer() {
 	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		renderHTML(w, "index.html")
 	})
+
+	m.Handle("/metrics", promhttp.Handler())
 
 	m.HandleFunc("/version", func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, version)
@@ -172,7 +175,11 @@ func (server *Server) initHTTPServer() {
 	})
 
 	m.HandleFunc("/webviews", func(w http.ResponseWriter, r *http.Request) {
-		netUnix, err := procfs.NewNetUnix()
+		fs, err := procfs.NewFS("/proc/net/unix")
+		if err != nil {
+			return
+		}
+		netUnix, err := fs.NetUNIX()
 		if err != nil {
 			return
 		}
@@ -196,7 +203,11 @@ func (server *Server) initHTTPServer() {
 
 	m.HandleFunc("/webviews/{pkgname}", func(w http.ResponseWriter, r *http.Request) {
 		packageName := mux.Vars(r)["pkgname"]
-		netUnix, err := procfs.NewNetUnix()
+		fs, err := procfs.NewFS("/proc/net/unix")
+		if err != nil {
+			return
+		}
+		netUnix, err := fs.NetUNIX()
 		if err != nil {
 			return
 		}
@@ -548,12 +559,13 @@ func (server *Server) initHTTPServer() {
 
 	// keep ApkService always running
 	// if no activity in 5min, then restart apk service
+
 	const apkServiceTimeout = 5 * time.Minute
 	apkServiceTimer := NewSafeTimer(apkServiceTimeout)
 	go func() {
 		for range apkServiceTimer.C {
-			log.Println("startservice com.github.uiautomator/.Service")
-			runShell("am", "startservice", "-n", "com.github.uiautomator/.Service")
+			// log.Println("startservice com.github.uiautomator/.Service")
+			// runShell("am", "startservice", "-n", "com.github.uiautomator/.Service")
 			apkServiceTimer.Reset(apkServiceTimeout)
 		}
 	}()
