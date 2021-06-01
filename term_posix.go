@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/sirupsen/logrus"
+	"github.com/creack/pty"
 	"github.com/gorilla/websocket"
-	"github.com/kr/pty"
+	"github.com/sirupsen/logrus"
 )
 
 type windowSize struct {
