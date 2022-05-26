@@ -185,7 +185,6 @@ type MinicapInfo struct {
 
 var (
 	deviceRotation        int
-	displayMaxWidthHeight = 1080
 
 )
 
