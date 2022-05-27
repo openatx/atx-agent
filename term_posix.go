@@ -13,7 +13,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 	"github.com/gorilla/websocket"
-	"github.com/kr/pty"
+	"github.com/creack/pty"
 )
 
 type windowSize struct {

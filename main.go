@@ -185,6 +185,7 @@ type MinicapInfo struct {
 
 var (
 	deviceRotation        int
+	displayMaxWidthHeight = 1080
 
 )
 
@@ -415,6 +416,7 @@ func stopSelf() {
 	}
 
 	// to make sure stopped
+    killProcessByName("minicap")
 	killAgentProcess()
 }
 
@@ -525,6 +527,7 @@ func main() {
 	cmdServer := kingpin.Command("server", "start server")
 	fDaemon := cmdServer.Flag("daemon", "daemon mode").Short('d').Bool()
 	fStop := cmdServer.Flag("stop", "stop server").Bool()
+	resetQuality := cmdServer.Flag("reset", "reset image quality").Bool()
 	cmdServer.Flag("addr", "listen port").Default(":7912").StringVar(&listenAddr) // Create on 2017/09/12
 	cmdServer.Flag("log", "log file path when in daemon mode").StringVar(&daemonLogPath)
 	// fServerURL := cmdServer.Flag("server", "server url").Short('t').String()
@@ -576,6 +579,23 @@ func main() {
 			return
 		}
 	}
+
+	if *resetQuality {
+        running := service.Running("minicap")
+        if running {
+            service.Stop("minicap")
+            killProcessByName("minicap") // kill not controlled minicap
+        }
+        devInfo := getDeviceInfo()
+        width, height := devInfo.Display.Width, devInfo.Display.Height
+        service.Add("minicap", cmdctrl.CommandInfo{
+            Environ: []string{"LD_LIBRARY_PATH=/data/local/tmp"},
+            Args: []string{"/data/local/tmp/minicap", "-S", "-P",
+                fmt.Sprintf("%dx%d@%dx%d/0", width, height, width, height), "-Q", minicapQuality},
+        })
+        service.Start("minicap")
+	}
+
 
 	// serverURL := *fServerURL
 	// if serverURL != "" {
