@@ -50,6 +50,7 @@ var (
 	owner         = "openatx"
 	repo          = "atx-agent"
 	listenAddr    string
+	minicapQuality string
 	daemonLogPath = "/sdcard/atx-agent.daemon.log"
 
 	rotationPublisher   = broadcast.NewBroadcaster(1)
@@ -184,7 +185,8 @@ type MinicapInfo struct {
 
 var (
 	deviceRotation        int
-	displayMaxWidthHeight = 800
+	displayMaxWidthHeight = 1080
+
 )
 
 func updateMinicapRotation(rotation int) {
@@ -196,7 +198,7 @@ func updateMinicapRotation(rotation int) {
 	devInfo := getDeviceInfo()
 	width, height := devInfo.Display.Width, devInfo.Display.Height
 	service.UpdateArgs("minicap", "/data/local/tmp/minicap", "-S", "-P",
-		fmt.Sprintf("%dx%d@%dx%d/%d", width, height, displayMaxWidthHeight, displayMaxWidthHeight, rotation))
+		fmt.Sprintf("%dx%d@%dx%d/%d", width, height, width, height, rotation), "-Q", minicapQuality)
 	if running {
 		service.Start("minicap")
 	}
@@ -414,6 +416,7 @@ func stopSelf() {
 	}
 
 	// to make sure stopped
+    killProcessByName("minicap")
 	killAgentProcess()
 }
 
@@ -524,10 +527,14 @@ func main() {
 	cmdServer := kingpin.Command("server", "start server")
 	fDaemon := cmdServer.Flag("daemon", "daemon mode").Short('d').Bool()
 	fStop := cmdServer.Flag("stop", "stop server").Bool()
+	resetQuality := cmdServer.Flag("reset", "reset image quality").Bool()
 	cmdServer.Flag("addr", "listen port").Default(":7912").StringVar(&listenAddr) // Create on 2017/09/12
 	cmdServer.Flag("log", "log file path when in daemon mode").StringVar(&daemonLogPath)
 	// fServerURL := cmdServer.Flag("server", "server url").Short('t').String()
 	fNoUiautomator := cmdServer.Flag("nouia", "do not start uiautoamtor when start").Bool()
+
+	// 图片质量
+	cmdServer.Flag("quality", "传输图片质量，1~100").Default("80").StringVar(&minicapQuality)
 
 	// CMD: version
 	kingpin.Command("version", "show version")
@@ -541,6 +548,7 @@ func main() {
 	os.Setenv("COLUMNS", "160")
 
 	kingpin.Command("info", "show device info")
+
 	switch kingpin.Parse() {
 	case "curl":
 		subcmd.DoCurl()
@@ -571,6 +579,23 @@ func main() {
 			return
 		}
 	}
+
+	if *resetQuality {
+        running := service.Running("minicap")
+        if running {
+            service.Stop("minicap")
+            killProcessByName("minicap") // kill not controlled minicap
+        }
+        devInfo := getDeviceInfo()
+        width, height := devInfo.Display.Width, devInfo.Display.Height
+        service.Add("minicap", cmdctrl.CommandInfo{
+            Environ: []string{"LD_LIBRARY_PATH=/data/local/tmp"},
+            Args: []string{"/data/local/tmp/minicap", "-S", "-P",
+                fmt.Sprintf("%dx%d@%dx%d/0", width, height, width, height), "-Q", minicapQuality},
+        })
+        service.Start("minicap")
+	}
+
 
 	// serverURL := *fServerURL
 	// if serverURL != "" {
@@ -626,7 +651,7 @@ func main() {
 	service.Add("minicap", cmdctrl.CommandInfo{
 		Environ: []string{"LD_LIBRARY_PATH=/data/local/tmp"},
 		Args: []string{"/data/local/tmp/minicap", "-S", "-P",
-			fmt.Sprintf("%dx%d@%dx%d/0", width, height, displayMaxWidthHeight, displayMaxWidthHeight)},
+			fmt.Sprintf("%dx%d@%dx%d/0", width, height, width, height), "-Q", minicapQuality},
 	})
 
 	service.Add("apkagent", cmdctrl.CommandInfo{

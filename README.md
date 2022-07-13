@@ -27,6 +27,12 @@ $ adb shell /data/local/tmp/atx-agent server -d
 
 # stop already running atx-agent and start daemon
 $ adb shell /data/local/tmp/atx-agent server -d --stop
+
+# 管控图片质量(1~100)，默认80
+adb shell /data/local/tmp/atx-agent server --nouia -d --quality=10
+
+# 在服务运行过程中动态修改图片质量
+adb shell /data/local/tmp/atx-agent server --reset --quality=80
 ```
 
 默认监听的端口是7912。
