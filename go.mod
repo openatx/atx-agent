@@ -28,7 +28,7 @@ require (
 	github.com/kr/binarydist v0.1.0 // indirect
 	github.com/kr/pty v1.1.8
 	github.com/levigross/grequests v0.0.0-20190130132859-37c80f76a0da
-	github.com/mholt/archiver v2.0.1-0.20171012052341-26cf5bb32d07+incompatible
+	github.com/mholt/archiver v2.1.0+incompatible
 	github.com/mitchellh/ioprogress v0.0.0-20180201004757-6a23b12fa88e
 	github.com/nwaples/rardecode v1.0.0 // indirect
 	github.com/onsi/gomega v1.5.0 // indirect
@@ -40,8 +40,6 @@ require (
 	github.com/rs/cors v1.6.0
 	github.com/sevlyar/go-daemon v0.1.4
 	github.com/shogo82148/androidbinary v1.0.1
-	github.com/shurcooL/httpfs v0.0.0-20190707220628-8d4bc4ba7749 // indirect
-	github.com/shurcooL/vfsgen v0.0.0-20200824052919-0d455de96546 // indirect
 	github.com/sirupsen/logrus v1.6.0
 	github.com/stretchr/testify v1.4.0
 	github.com/ulikunitz/xz v0.5.5 // indirect
