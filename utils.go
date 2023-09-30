@@ -284,7 +284,12 @@ type PackageInfo struct {
 
 func readPackageInfo(packageName string) (info PackageInfo, err error) {
 	outbyte, err := runShell("pm", "path", packageName)
-	output := strings.TrimSpace(string(outbyte))
+	lines := strings.Split(string(outbyte), "\n")
+	if len(lines) == 0 {
+    	err = errors.New("no output received")
+    return
+	}
+	output := strings.TrimSpace(lines[0])
 	if !strings.HasPrefix(output, "package:") {
 		err = errors.New("package " + strconv.Quote(packageName) + " not found")
 		return
