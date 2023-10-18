@@ -65,6 +65,6 @@ $ 25654`),
 	}
 	close(reqC)
 	drainTouchRequests(conn, reqC)
-	output := string(conn.buffer.Bytes())
+	output := conn.buffer.String()
 	assert.Equal(t, "d 1 1080 1920 255\nc\nm 3 540 960 255\nu 4\n", output)
 }
