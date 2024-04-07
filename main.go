@@ -175,12 +175,12 @@ func GoFunc(f func() error) chan error {
 	return ch
 }
 
-type MinicapInfo struct {
-	Width    int     `json:"width"`
-	Height   int     `json:"height"`
-	Rotation int     `json:"rotation"`
-	Density  float32 `json:"density"`
-}
+//type MinicapInfo struct {
+//	Width    int     `json:"width"`
+//	Height   int     `json:"height"`
+//	Rotation int     `json:"rotation"`
+//	Density  float32 `json:"density"`
+//}
 
 var (
 	deviceRotation        int
