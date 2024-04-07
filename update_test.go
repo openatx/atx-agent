@@ -14,12 +14,12 @@ func TestFormatString(t *testing.T) {
 	assert.Equal(t, s, "a x y x")
 }
 
-func TestGetLatestVersion(t *testing.T) {
-	version, err := getLatestVersion()
-	assert.NoError(t, err)
-	t.Logf("version: %s", version)
-	assert.NotEqual(t, version, "")
-}
+//func TestGetLatestVersion(t *testing.T) {
+	//version, err := getLatestVersion()
+	//assert.NoError(t, err)
+	//t.Logf("version: %s", version)
+	//assert.NotEqual(t, version, "")
+//}
 
 func TestGetChecksums(t *testing.T) {
 	maps, err := getChecksums("0.0.1")

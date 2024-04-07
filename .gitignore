@@ -20,6 +20,6 @@ testcmd/
 *.tmp/
 *.exe.old
 *.apk
-go.sum
 .DS_Store
 dist/
+#go.sum
