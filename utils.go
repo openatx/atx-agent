@@ -286,8 +286,8 @@ func readPackageInfo(packageName string) (info PackageInfo, err error) {
 	outbyte, err := runShell("pm", "path", packageName)
 	lines := strings.Split(string(outbyte), "\n")
 	if len(lines) == 0 {
-    	err = errors.New("no output received")
-    return
+		err = errors.New("no output received")
+		return
 	}
 	output := strings.TrimSpace(lines[0])
 	if !strings.HasPrefix(output, "package:") {
@@ -435,16 +435,17 @@ func copyToFile(rd io.Reader, dst string) error {
 
 // parse output: dumpsys meminfo --local ${pkgname}
 // If everything is going, returns json, unit KB
-// {
-//     "code": 58548,
-//     "graphics": 73068,
-//     "java heap": 160332,
-//     "native heap": 67708,
-//     "private Other": 34976,
-//     "stack": 4728,
-//     "system": 8288,
-//     "total": 407648
-// }
+//
+//	{
+//	    "code": 58548,
+//	    "graphics": 73068,
+//	    "java heap": 160332,
+//	    "native heap": 67708,
+//	    "private Other": 34976,
+//	    "stack": 4728,
+//	    "system": 8288,
+//	    "total": 407648
+//	}
 func parseMemoryInfo(nameOrPid string) (info map[string]int, err error) {
 	output, err := Command{
 		Args:    []string{"dumpsys", "meminfo", "--local", nameOrPid},
